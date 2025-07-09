@@ -1,4 +1,6 @@
-use crate::structs::producto::Producto;
+use crate::structs::producto::{self, Producto};
+use ink::{prelude::vec::Vec, xcm::v2::NetworkId::Polkadot}; // esto me permite usar el vector de Ink.
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -19,8 +21,42 @@ pub enum Categoria {
     derive(ink::storage::traits::StorageLayout)
 )]
 pub struct Publicacion {
-    pub producto: Producto,
+    pub producto: Vec<Producto>,
     pub categoria: Categoria,
     pub stock: u32,
-    pub precio: u32,
+    pub precio: u128,
+}
+
+pub enum ErrorCrearNuevaPublicacion{
+    StockCero,
+    PrecioCero,
+    VectorVacio,
+}
+
+impl Publicacion{
+
+    fn new (producto: Vec<Producto>, categoria: Categoria, stock:u32, precio:u128)-> Result<Publicacion, ErrorCrearNuevaPublicacion>{
+        
+        //manejo de errores
+        if producto.is_empty() {
+            return Err(ErrorCrearNuevaPublicacion::VectorVacio);
+        }
+        if stock == 0 {
+            return Err(ErrorCrearNuevaPublicacion::StockCero);
+        }
+        if precio == 0{
+            return Err(ErrorCrearNuevaPublicacion::PrecioCero);
+        }
+        //manejo de errores
+
+        return Ok(
+            Publicacion{
+                producto,
+                categoria,
+                stock,
+                precio
+            }
+        );
+    }
+
 }

@@ -1,7 +1,4 @@
 
-
-
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
