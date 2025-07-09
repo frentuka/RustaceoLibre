@@ -1,3 +1,4 @@
+use ink::prelude::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -7,7 +8,7 @@
 )]
 pub enum Rol {
     #[default]
-    Cliente, Vendedor
+    Comprador, Vendedor, Ambos
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -18,4 +19,16 @@ pub enum Rol {
 )]
 pub struct Usuario {
     rol: Rol,
+    ventas: Option<Vec<u128>>,
+    compras: Option<Vec<u128>>,
+}
+
+impl Usuario {
+    pub fn es_comprador(&self) -> bool {
+        self.rol == Rol::Comprador || self.rol == Rol::Ambos
+    }
+
+    pub fn es_vendedor(&self) -> bool {
+        self.rol == Rol::Vendedor || self.rol == Rol::Ambos
+    }
 }
