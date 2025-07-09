@@ -1,18 +1,30 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
+#[allow(non_local_definitions)] // error molesto
 #[ink::contract]
 mod rustaceo_libre {
-    use ink::storage::{StorageVec};
+    use ink::storage::{Mapping, StorageVec};
     // structs propias
 
     //
     // RustaceoLibre: main struct
     //
 
+    #[derive(Debug, Clone, PartialEq, Eq, Default)]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    #[cfg_attr(
+        feature = "std",
+        derive(ink::storage::traits::StorageLayout)
+    )]
+    pub enum Rol {
+        #[default]
+        Cliente, Vendedor
+    }
+
     /// Definición de la estructura del contrato
     #[ink(storage)]
     pub struct RustaceoLibre {
-        pub compradores: StorageVec<AccountId>,
+        pub compradores: Mapping<AccountId, Rol>,
         pub vendedores: StorageVec<AccountId>,
         pub publicaciones: StorageVec<u128>,
         pub compras: StorageVec<u128>,
@@ -21,7 +33,7 @@ mod rustaceo_libre {
         /// Lleva un recuento de la próxima ID disponible para las compras.
         pub compras_siguiente_id: u128,
         /// ID del dueño del contrato
-        pub admin: AccountId,
+        pub owner: AccountId,
     }
 
     impl RustaceoLibre {
@@ -48,7 +60,7 @@ mod rustaceo_libre {
                 compras: Default::default(),
                 publicaciones_siguiente_id: 0,
                 compras_siguiente_id: 0,
-                admin: Self::env().account_id(),
+                owner: Self::env().caller(),
             }
         }
 
@@ -57,7 +69,7 @@ mod rustaceo_libre {
         /// to `false` and vice versa.
         #[ink(message)]
         pub fn next_id_compras(&mut self) -> Option<u128> {
-            if self.admin != self.env().caller() {
+            if self.owner != self.env().caller() {
                 return None;
             }
 
@@ -69,6 +81,10 @@ mod rustaceo_libre {
         /// Simply returns the current value of our `bool`.
         #[ink(message)]
         pub fn next_id_publicaciones(&mut self) -> Option<u128> {
+            if self.owner != self.env().caller() {
+                return None;
+            }
+
             let id = self.publicaciones_siguiente_id; // obtener actual
             self.publicaciones_siguiente_id.checked_add(1)?; // sumarle 1 al actual para que apunte a un id desocupado
             Some(id) // devolver
