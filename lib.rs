@@ -5,10 +5,14 @@ mod structs;
 #[allow(non_local_definitions)] // error molesto
 #[ink::contract]
 mod rustaceo_libre {
-    use ink::storage::{Mapping, StorageVec};
+    use ink::storage::{Mapping};
+
+    use ink::prelude::vec::Vec;
+    use ink::prelude::collections::BTreeMap;
+
     // structs propias
-    
-    use crate::structs::usuario::{Rol, Usuario};
+    use crate::structs::usuario::Usuario;
+    use crate::structs::publicacion::Publicacion;
 
     //
     // RustaceoLibre: main struct
@@ -17,10 +21,9 @@ mod rustaceo_libre {
     /// Definición de la estructura del contrato
     #[ink(storage)]
     pub struct RustaceoLibre {
-        pub compradores: Mapping<AccountId, Usuario>,
-        pub vendedores: StorageVec<AccountId>,
-        pub publicaciones: StorageVec<u128>,
-        pub compras: StorageVec<u128>,
+        pub usuarios: Mapping<AccountId, Usuario>,
+        pub publicaciones: BTreeMap<u128, Publicacion>,
+        pub compras: Vec<u128>,
         /// Lleva un recuento de la próxima ID disponible para los productos.
         pub publicaciones_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para las compras.
@@ -47,8 +50,7 @@ mod rustaceo_libre {
         /// Crea una nueva instancia de RustaceoLibre
         fn _new() -> Self {
             Self {
-                compradores: Default::default(),
-                vendedores: Default::default(),
+                usuarios: Default::default(),
                 publicaciones: Default::default(),
                 compras: Default::default(),
                 publicaciones_siguiente_id: 0,
