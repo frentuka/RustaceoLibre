@@ -1,30 +1,23 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
+mod structs;
+
 #[allow(non_local_definitions)] // error molesto
 #[ink::contract]
 mod rustaceo_libre {
     use ink::storage::{Mapping, StorageVec};
     // structs propias
+    
+    use crate::structs::usuario::{Rol, Usuario};
 
     //
     // RustaceoLibre: main struct
     //
 
-    #[derive(Debug, Clone, PartialEq, Eq, Default)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[cfg_attr(
-        feature = "std",
-        derive(ink::storage::traits::StorageLayout)
-    )]
-    pub enum Rol {
-        #[default]
-        Cliente, Vendedor
-    }
-
     /// Definición de la estructura del contrato
     #[ink(storage)]
     pub struct RustaceoLibre {
-        pub compradores: Mapping<AccountId, Rol>,
+        pub compradores: Mapping<AccountId, Usuario>,
         pub vendedores: StorageVec<AccountId>,
         pub publicaciones: StorageVec<u128>,
         pub compras: StorageVec<u128>,
