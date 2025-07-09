@@ -1,4 +1,8 @@
-use ink::prelude::vec::Vec;
+use ink::{prelude::vec::Vec, primitives::AccountId};
+
+//
+// rol
+//
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -11,19 +15,37 @@ pub enum Rol {
     Comprador, Vendedor, Ambos
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+//
+// usuario
+//
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
 pub struct Usuario {
-    rol: Rol,
-    ventas: Option<Vec<u128>>,
-    compras: Option<Vec<u128>>,
+    pub id: AccountId,
+    pub rol: Rol,
+    pub compraventas: Option<Vec<u128>>, // Guarda compras y ventas. Si vendedor == id, Usuario es el vendedor. Caso contrario, es comprador.
+    pub publicaciones: Option<Vec<u128>>,
 }
 
+//
+// impl usuario
+//
+
 impl Usuario {
+    pub fn new(id: AccountId, rol: Rol) -> Self {
+        Self {
+            id,
+            rol,
+            compraventas: Default::default(),
+            publicaciones: Default::default(),
+        }
+    }
+
     pub fn es_comprador(&self) -> bool {
         self.rol == Rol::Comprador || self.rol == Rol::Ambos
     }

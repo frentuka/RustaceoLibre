@@ -1,4 +1,9 @@
 
+//
+// estado compra
+//
+
+use ink::primitives::AccountId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -14,8 +19,11 @@ pub enum EstadoCompra {
     Cancelado
 }
 
-/// Orden de compra
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+//
+// compra
+//
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
     feature = "std",
@@ -24,4 +32,6 @@ pub enum EstadoCompra {
 pub struct Compra {
     pub publicacion: u128,
     pub estado: EstadoCompra,
+    pub comprador: AccountId,
+    pub vendedor: AccountId,
 }

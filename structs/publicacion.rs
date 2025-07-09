@@ -1,62 +1,58 @@
-use crate::structs::producto::{self, Producto};
-use ink::{prelude::vec::Vec, xcm::v2::NetworkId::Polkadot}; // esto me permite usar el vector de Ink.
+use crate::structs::producto::{Producto};
+use ink::{prelude::vec::Vec, primitives::AccountId};
 
+//
+// publicacion
+//
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[ink::scale_derive(Encode, Decode, TypeInfo)]
-#[cfg_attr(
-    feature = "std",
-    derive(ink::storage::traits::StorageLayout)
-)]
-pub enum Categoria {
-    #[default]
-    Otros, Cat1, Cat2
-}
-
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
 pub struct Publicacion {
-    pub producto: Vec<Producto>,
-    pub categoria: Categoria,
+    pub vendedor: AccountId,
+    pub productos: Vec<Producto>,
     pub stock: u32,
     pub precio: u128,
 }
 
-pub enum ErrorCrearNuevaPublicacion{
+//
+// errores
+//
+
+
+pub enum ErrorNuevaPublicacion {
     StockCero,
     PrecioCero,
     VectorVacio,
 }
 
-impl Publicacion{
+//
+// impl publicacion
+//
 
-    fn new (producto: Vec<Producto>, categoria: Categoria, stock:u32, precio:u128)-> Result<Publicacion, ErrorCrearNuevaPublicacion>{
-        
-        //manejo de errores
-        if producto.is_empty() {
-            return Err(ErrorCrearNuevaPublicacion::VectorVacio);
+impl Publicacion{
+    fn new(vendedor: AccountId, productos: Vec<Producto>, stock:u32, precio:u128)-> Result<Publicacion, ErrorNuevaPublicacion>{
+        // errores
+        if productos.is_empty() {
+            return Err(ErrorNuevaPublicacion::VectorVacio);
         }
         if stock == 0 {
-            return Err(ErrorCrearNuevaPublicacion::StockCero);
+            return Err(ErrorNuevaPublicacion::StockCero);
         }
         if precio == 0{
-            return Err(ErrorCrearNuevaPublicacion::PrecioCero);
+            return Err(ErrorNuevaPublicacion::PrecioCero);
         }
-        //manejo de errores
 
         return Ok(
             Publicacion{
-                producto,
-                categoria,
+                vendedor,
+                productos,
                 stock,
                 precio
             }
         );
     }
-
 }
