@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="CargoProjects">
+    <cargoProject FILE="$PROJECT_DIR$/Cargo.toml">
+      <package file="$PROJECT_DIR$">
+        <enabledFeature name="e2e-tests" />
+        <enabledFeature name="default" />
+        <enabledFeature name="std" />
+        <enabledFeature name="ink-as-dependency" />
+      </package>
+    </cargoProject>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="c9add070-1315-4cd9-b489-ab8ba0f1a53d" name="Changes" comment="Primer commit válido, intentando entender cómo se usa Ink!.">
+      <change afterPath="$PROJECT_DIR$/rust-toolchain.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/RustaceoLibre.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/structs/mod.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/structs/producto.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/structs/usuario.rs" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Rust File" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;frentuka&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/frentuka/RustaceoLibre.git&quot;,
+    &quot;accountId&quot;: &quot;cb67ba38-e858-42fe-aae1-6e787a02e755&quot;
+  }
+}</component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="T75PmhbZ" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 1
+}</component>
+  <component name="ProjectId" id="2zW4ylwTT10pkicmEqhjbnORkKs" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "Cargo.Build RustaceoLibre.executor": "Run",
+    "Cargo.Test rustaceo_libre::tests::default_works.executor": "Run",
+    "Cargo.Test rustaceo_libre::tests::it_works.executor": "Run",
+    "Cargo.clean.executor": "Run",
+    "Cargo.contract.executor": "Run",
+    "Cargo.default.executor": "Run",
+    "Cargo.install.executor": "Run",
+    "Cargo.rustup.executor": "Run",
+    "Cargo.update.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "master",
+    "ignore.virus.scanning.warn.message": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "org.rust.first.attach.projects": "true",
+    "settings.editor.selected.configurable": "language.rust.cargo.check",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="R:\appcrap\RustRover\RustaceoLibre" />
+    </key>
+  </component>
+  <component name="RunAnythingCache">
+    <option name="myCommands">
+      <command value="cargo install cargo-contract" />
+      <command value="rustup component add rust-src --toolchain nightly-2024-05-20-aarch64-apple-darwin" />
+      <command value="cargo install cargo-contract --force" />
+      <command value="cargo contract new test_contract_1" />
+      <command value="cargo contract new RustaceoLibre" />
+      <command value="cargo install nightly" />
+      <command value="cargo default nightly" />
+      <command value="rustup install nightly" />
+      <command value="rustup default nightly" />
+      <command value="cargo rustup target add wasm32-unknown-unknown" />
+      <command value="rustup target add wasm32-unknown-unknown" />
+      <command value="cargo update" />
+      <command value="cargo contract build" />
+      <command value="cargo clean" />
+    </option>
+  </component>
+  <component name="RunManager" selected="Cargo.clean">
+    <configuration name="Build RustaceoLibre" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="buildProfileId" value="dev" />
+      <option name="command" value="build --package RustaceoLibre --lib" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package RustaceoLibre --bin RustaceoLibre" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="clean" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="clean" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="contract" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="contract build" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="rustup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="rustup target add wasm32-unknown-unknown" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="update" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="update" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Cargo.clean" />
+        <item itemvalue="Cargo.Build RustaceoLibre" />
+        <item itemvalue="Cargo.contract" />
+        <item itemvalue="Cargo.contract" />
+        <item itemvalue="Cargo.contract" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="RustProjectSettings">
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="c9add070-1315-4cd9-b489-ab8ba0f1a53d" name="Changes" comment="" />
+      <created>1751833751873</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1751833751873</updated>
+      <workItem from="1751833753143" duration="3362000" />
+      <workItem from="1751919945418" duration="14723000" />
+      <workItem from="1752013889214" duration="850000" />
+      <workItem from="1752015640756" duration="154000" />
+      <workItem from="1752019363950" duration="1041000" />
+      <workItem from="1752023885538" duration="717000" />
+      <workItem from="1752024649553" duration="726000" />
+      <workItem from="1752028321067" duration="2234000" />
+      <workItem from="1752042091471" duration="1297000" />
+    </task>
+    <task id="LOCAL-00001" summary="Primer commit válido, intentando entender cómo se usa Ink!.">
+      <option name="closed" value="true" />
+      <created>1752008362807</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1752008362807</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Primer commit válido, intentando entender cómo se usa Ink!." />
+    <option name="LAST_COMMIT_MESSAGE" value="Primer commit válido, intentando entender cómo se usa Ink!." />
+  </component>
+</project>
