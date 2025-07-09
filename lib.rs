@@ -13,6 +13,7 @@ mod rustaceo_libre {
     // structs propias
     use crate::structs::usuario::Usuario;
     use crate::structs::publicacion::Publicacion;
+    use crate::structs::compra::Compra;
 
     //
     // RustaceoLibre: main struct
@@ -21,9 +22,12 @@ mod rustaceo_libre {
     /// Definición de la estructura del contrato
     #[ink(storage)]
     pub struct RustaceoLibre {
+        /// <ID del usuario, Usuario>
         pub usuarios: Mapping<AccountId, Usuario>,
+        /// <ID, Publicacion>
         pub publicaciones: BTreeMap<u128, Publicacion>,
-        pub compras: Vec<u128>,
+        /// <ID, Compra>
+        pub compras: BTreeMap<u128, Compra>,
         /// Lleva un recuento de la próxima ID disponible para los productos.
         pub publicaciones_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para las compras.
@@ -33,15 +37,13 @@ mod rustaceo_libre {
     }
 
     impl RustaceoLibre {
-        /// Constructor that initializes the `bool` value to the given `init_value`.
+        /// Construye un nuevo contrato con sus valores por defecto
         #[ink(constructor)]
         pub fn new() -> Self {
             Self::_new()
         }
 
-        /// Constructor that initializes the `bool` value to `false`.
-        ///
-        /// Constructors can delegate to other constructors.
+        /// Constructor por defecto (Ídem new())
         #[ink(constructor)]
         pub fn default() -> Self {
             Self::_new()
