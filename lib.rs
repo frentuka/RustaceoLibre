@@ -5,13 +5,14 @@ mod structs;
 #[allow(non_local_definitions)] // error molesto
 #[ink::contract]
 mod rustaceo_libre {
+    use ink::prelude::vec::Vec;
     use ink::storage::Mapping;
     use ink::prelude::collections::BTreeMap;
 
-    use crate::structs::producto::Producto;
     // structs propias
-    use crate::structs::usuario::{self, Rol, Usuario};
-    use crate::structs::publicacion::Publicacion;
+    use crate::structs::usuario::{ErrorModificarRolUsuario, ErrorRegistrarUsuario, Rol, Usuario};
+    use crate::structs::publicacion::{ErrorRealizarPublicacion, Publicacion};
+    use crate::structs::producto::Producto;
     use crate::structs::compra::Compra;
 
     //
@@ -35,42 +36,7 @@ mod rustaceo_libre {
         pub owner: AccountId,
     }
 
-    //
-    // errores
-    //
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[cfg_attr(
-        feature = "std",
-        derive(ink::storage::traits::StorageLayout)
-    )]
-    pub enum ErrorRegistrarUsuario {
-        UsuarioYaExiste,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[cfg_attr(
-        feature = "std",
-        derive(ink::storage::traits::StorageLayout)
-    )]
-    pub enum ErrorModificarRolUsuario {
-        UsuarioInexistente,
-        MismoRolAsignado,
-    }
-
-        #[derive(Debug, Clone, PartialEq, Eq)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    #[cfg_attr(
-        feature = "std",
-        derive(ink::storage::traits::StorageLayout)
-    )]
-    pub enum ErrorRealizarPublicacion {
-        UsuarioInexistente,
-        NoEsVendedor,
-    }
-
+    #[ink(impl)]
     impl RustaceoLibre {
         /// Construye un nuevo contrato con sus valores por defecto
         #[ink(constructor)]
@@ -100,82 +66,35 @@ mod rustaceo_libre {
         // impl publicos
         //
 
-        #[ink(message)]
-        pub fn registrar_usuario(&mut self, rol: Rol) -> Result<(), ErrorRegistrarUsuario>  {
-            self._registrar_usuario(rol)
-        }
-
         /// Registra un usuario en el Mapping de usuarios.
         /// 
         /// Devuelve error si el usuario ya existe.
-        fn _registrar_usuario(&mut self, rol: Rol) -> Result<(), ErrorRegistrarUsuario>  {
-            let user_id = self.env().caller();
-            // el usuario no puede ya existir
-            if self.usuarios.contains(user_id) {
-                return Err(ErrorRegistrarUsuario::UsuarioYaExiste)
-            }
-
-            let usuario = Usuario::new(user_id, rol);
-            self.usuarios.insert(user_id, &usuario); // por algún motivo es un préstamo, se supone que se clona.
-            Ok(())
+        #[ink(message)]
+        pub fn registrar_usuario(&mut self, rol: Rol) -> Result<(), ErrorRegistrarUsuario>  {
+            self._registrar_usuario(self.env().caller(), rol)
         }
 
         ///////////////
-
-        #[ink(message)]
-        pub fn modificar_rol_usuario(&mut self, rol: Rol) -> Result<(), ErrorModificarRolUsuario> {
-            self._modificar_rol_usuario(rol)
-        }
 
         /// Recibe un rol y lo modifica para ese usuario si ya está registrado.
         /// 
         /// Devuelve error si el usuario no existe o ya posee ese rol.
-        fn _modificar_rol_usuario(&mut self, rol: Rol) -> Result<(), ErrorModificarRolUsuario> {
-            let user_id = self.env().caller();
-            // si no existe, es imposible modificar
-            let Some(usuario) = self.usuarios.get(user_id)
-            else {
-                return Err(ErrorModificarRolUsuario::UsuarioInexistente);
-            };
-
-            // si ya posee ese rol, hacerlo saber
-            if usuario.rol == rol {
-                return Err(ErrorModificarRolUsuario::MismoRolAsignado)
-            }
-
-            // todo bien: asignar nuevo rol. creo que no se pueden hacer modificaciones directas
-            // normalmente obtendría usuario como mut (self.usuarios.get_mut()) y modificaría esa instancia mutable
-            // tengo entendido que no es posible, hay que modificar una copia y reemplazarlo
-            let mut usuario = usuario;
-            usuario.rol = rol;
-            self.usuarios.insert(user_id, &usuario);
-
-            Ok(())
+        #[ink(message)]
+        pub fn modificar_rol_usuario(&mut self, rol: Rol) -> Result<(), ErrorModificarRolUsuario> {
+            self._modificar_rol_usuario(self.env().caller(), rol)
         }
 
         ///////////////
 
+        /// Realiza una publicación con producto, precio y cantidad.
+        /// 
+        /// Devuelve Error si el precio o la cantidad son 0, o si `caller` no existe o no es vendedor.
         #[ink(message)]
         pub fn realizar_publicacion(&mut self, productos: Vec<Producto>, precio: Balance) -> Result<(), ErrorRealizarPublicacion> {
-            self._realizar_publicacion(productos, precio)
+            self._realizar_publicacion(self.env().caller(), productos, precio)
         }
 
-        fn _realizar_publicacion(&mut self, productos: Vec<Producto>, precio: Balance) -> Result<(), ErrorRealizarPublicacion> {
-            let user_id = self.env().caller();
-            let Some(usuario) = self.usuarios.get(user_id) else {
-                return Err(ErrorRealizarPublicacion::UsuarioInexistente);
-            };
-
-            if !usuario.es_vendedor() {
-                return Err(ErrorRealizarPublicacion::NoEsVendedor);
-            }
-
-            todo!();
-        }
-
-        //
-        // impl internos
-        //
+        ///////////////
 
         /// Devuelve la siguiente ID disponible para compras
         /// 
