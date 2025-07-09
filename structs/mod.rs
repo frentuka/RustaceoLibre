@@ -1,3 +1,4 @@
-pub mod usuario;
-pub mod producto;
-pub mod publicacion;
+pub(crate) mod usuario;
+pub(crate) mod producto;
+pub(crate) mod publicacion;
+pub(crate) mod compra;
