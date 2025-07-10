@@ -11,7 +11,7 @@ mod rustaceo_libre {
     // structs propias
     use crate::structs::usuario::{ErrorModificarRolUsuario, ErrorRegistrarUsuario, Rol, Usuario};
     use crate::structs::producto::{CategoriaProducto, ErrorRealizarPublicacion, ErrorVerProductosVendedor, Producto};
-    use crate::structs::compra::Compra;
+    use crate::structs::compra::{Compra, EstadoCompra};
 
     //
     // RustaceoLibre: main struct
@@ -104,15 +104,55 @@ mod rustaceo_libre {
 
         ///////////////
         
-        /// Devuelve todos los productos que correspondan al vendedor que ejecute esta función.
+        /// Devuelve todos los productos publicados por el usuario que lo ejecute
         /// 
         /// Dará error si el usuario no está registrado como vendedor o si no tiene publicaciones.
         #[ink(message)]
         pub fn ver_productos_vendedor(&self) -> Result<Vec<Producto>, ErrorVerProductosVendedor> {
             self._ver_publicaciones_vendedor(self.env().caller())
         }
+        
+        //
+        // compras.rs
+        //
+
+        /// Devuelve las compras del usuario que lo ejecuta
+        /// 
+        /// Dará error si el usuario no está registrado como comprador o no tiene compras
+        #[ink(message)]
+        pub fn ver_compras(&self) -> Result<Vec<Compra>, ()> {
+            // self._ver_compras(self.env().caller())
+            todo!();
+        }
+
+        /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
+        /// 
+        /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
+        #[ink(message)]
+        pub fn ver_compras_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ()> {
+            // self._ver_compras_estado(self.env().caller())
+            todo!();
+        }
 
         ///////////////
+        
+        /// Devuelve las ventas del usuario que lo ejecuta
+        /// 
+        /// Dará error si el usuario no está registrado como vendedor o no tiene ventas
+        #[ink(message)]
+        pub fn ver_ventas(&self) -> Result<Vec<Compra>, ()> {
+            // self._ver_ventas(self.env().caller())
+            todo!();
+        }
+
+        /// Devuelve las ventas del usuario que lo ejecuta que estén en el estado especificado
+        /// 
+        /// Dará error si el usuario no está registrado como vendedor o no tiene ventas en ese estado
+        #[ink(message)]
+        pub fn ver_ventas_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ()> {
+            // self._ver_ventas_estado(self.env().caller(), estado)
+            todo!();
+        }
 
         /// Devuelve la siguiente ID disponible para compras
         /// 
