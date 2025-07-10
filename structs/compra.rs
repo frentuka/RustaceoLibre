@@ -18,7 +18,8 @@ pub enum EstadoCompra {
     Pendiente,
     Despachado,
     Entregado,
-    Cancelado
+    Cancelado,
+    SolicitadaCancelacionPorComprador
 }
 
 //
@@ -137,5 +138,73 @@ impl RustaceoLibre {
         Ok(compra_id)
     }
 
+
+
+    // marca como despachado el estado de la compra, solo si es vendedor y no esta en estado pendiente
+    pub fn marcar_como_despachado(&mut self, compra_id: u128, caller: AccountId) -> Result<(), &'static str> {
+    let compra = self.compras.get_mut(&compra_id).ok_or("Compra no encontrada")?;
+
+    if compra.vendedor != caller {
+        return Err("Solo el vendedor puede marcar como despachado");
+    }
+
+    if compra.estado != EstadoCompra::Pendiente {
+        return Err("La compra no está en estado pendiente");
+    }
+
+    compra.estado = EstadoCompra::Despachado;
+    Ok(())
+    }
+
+    // marca como entregado el estado de la compra, solo si es comprador y no esta en estado despachado
+    pub fn marcar_como_entregado(&mut self, compra_id: u128, caller: AccountId) -> Result<(), &'static str> {
+    let compra = self.compras.get_mut(&compra_id).ok_or("Compra no encontrada")?;
+
+    if compra.comprador != caller {
+        return Err("Solo el comprador puede marcar como entregado");
+    }
+
+    if compra.estado != EstadoCompra::Despachado {
+        return Err("La compra no está en estado despachado");
+    }
+
+    compra.estado = EstadoCompra::Entregado;
+    Ok(())
+    }
+
+    // marca como SolicitadaCancelacionPorComprador el estado de la compra, solo si es comprador
+    // y esta en estado pendiente
+    pub fn solicitar_cancelacion(&mut self, compra_id: u128, caller: AccountId) -> Result<(), &'static str> {
+    let compra = self.compras.get_mut(&compra_id).ok_or("Compra no encontrada")?;
+
+    if compra.comprador != caller {
+        return Err("Solo el comprador puede solicitar la cancelación");
+    }
+
+    if compra.estado != EstadoCompra::Pendiente {
+        return Err("Solo se puede cancelar una compra pendiente");
+    }
+
+    compra.estado = EstadoCompra::SolicitadaCancelacionPorComprador;
+    Ok(())
+    }
+
+    //marca como cancelado el estado de la compra, solo si es vendedor y fue solicitada previamente 
+    //por el comprador(verificando que no haya sido procesada)
+    
+    pub fn confirmar_cancelacion(&mut self, compra_id: u128, caller: AccountId) -> Result<(), &'static str> {
+    let compra = self.compras.get_mut(&compra_id).ok_or("Compra no encontrada")?;
+
+    if compra.vendedor != caller {
+        return Err("Solo el vendedor puede confirmar la cancelación");
+    }
+
+    if compra.estado != EstadoCompra::SolicitadaCancelacionPorComprador {
+        return Err("La cancelación no fue solicitada o ya fue procesada");
+    }
+
+    compra.estado = EstadoCompra::Cancelado;
+    Ok(())
+    }
 
 }
