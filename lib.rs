@@ -250,10 +250,14 @@ mod rustaceo_libre {
         pub fn next_id_compras(&mut self) -> u128 {
             let id = self.compras_siguiente_id; // obtener actual
             let add_res = self.compras_siguiente_id.checked_add(1); // sumarle 1 al actual para que apunte a un id desocupado
-            if add_res.is_none() {
+            
+            let Some(add_res) = add_res
+            else {
                 self.compras_siguiente_id = 1;
                 return 0;
-            }
+            };
+
+            self.compras_siguiente_id = add_res;
             id // devolver
         }
 
@@ -263,10 +267,14 @@ mod rustaceo_libre {
         pub fn next_id_publicaciones(&mut self) -> u128 {
             let id = self.publicaciones_siguiente_id; // obtener actual
             let add_res = self.publicaciones_siguiente_id.checked_add(1); // sumarle 1 al actual para que apunte a un id desocupado
-            if add_res.is_none() {
+            
+            let Some(add_res) = add_res
+            else {
                 self.publicaciones_siguiente_id = 1;
                 return 0;
-            }
+            };
+
+            self.publicaciones_siguiente_id = add_res;
             id // devolver
         }
     }

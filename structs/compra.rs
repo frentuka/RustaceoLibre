@@ -75,6 +75,7 @@ impl Compra {
     derive(ink::storage::traits::StorageLayout)
 )]
 pub enum ErrorComprarProducto {
+    CantidadCero,
     UsuarioInexistente,
     UsuarioNoEsComprador,
     PublicacionInexistente,
@@ -165,6 +166,10 @@ impl RustaceoLibre {
     /// Puede dar error si el usuario no existe, no es comprador, la publicación no existe,
     /// el stock es insuficiente o el vendedor de la misma no existe.
     pub fn _comprar_producto(&mut self, caller: AccountId, id_publicacion: u128, cantidad: u32) -> Result<u128, ErrorComprarProducto> {
+        if cantidad == 0 {
+            return Err(ErrorComprarProducto::CantidadCero);
+        }
+        
         // validar usuario
         let Some(comprador) = self.usuarios.get(caller)
         else { return Err(ErrorComprarProducto::UsuarioInexistente); };
@@ -343,7 +348,7 @@ impl RustaceoLibre {
             EstadoCompra::Recibido => return Err(ErrorCancelarCompra::CompraYaRecibida),
             EstadoCompra::Cancelado => return Err(ErrorCancelarCompra::CompraYaCancelada),
         }
-        
+    
         //
         // validar si ya existe una solicitud de cancelación
         //
@@ -487,7 +492,5 @@ impl RustaceoLibre {
         }).cloned().collect();
         Ok(ventas)
     }
-
-
 
 }

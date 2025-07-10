@@ -44,7 +44,7 @@ impl Usuario {
             id,
             rol,
             compraventas: Default::default(),
-            publicaciones: Default::default(),
+            publicaciones: None,
         }
     }
 
