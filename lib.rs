@@ -9,9 +9,28 @@ mod rustaceo_libre {
     use ink::prelude::{vec::Vec, string::String, collections::BTreeMap};
 
     // structs propias
-    use crate::structs::usuario::{ErrorModificarRolUsuario, ErrorRegistrarUsuario, Rol, Usuario};
-    use crate::structs::producto::{CategoriaProducto, ErrorRealizarPublicacion, ErrorVerProductosVendedor, Producto};
-    use crate::structs::compra::{Compra, EstadoCompra};
+    use crate::structs::usuario::{
+        Usuario,
+        Rol,
+        ErrorRegistrarUsuario,
+        ErrorModificarRolUsuario,
+    };
+    use crate::structs::producto::{
+        Producto,
+        CategoriaProducto,
+        ErrorRealizarPublicacion,
+        ErrorVerProductosVendedor,
+    };
+    use crate::structs::compra::{
+        Compra,
+        EstadoCompra,
+        ErrorComprarProducto,
+        ErrorCompraDespachada,
+        ErrorCompraRecibida,
+        ErrorCancelarCompra,
+        ErrorVerCompras,
+        ErrorVerVentas,
+    };
 
     //
     // RustaceoLibre: main struct
@@ -113,45 +132,116 @@ mod rustaceo_libre {
         }
         
         //
-        // compras.rs
+        // compras.rs: administrar compras
+        //
+
+        /// Compra una cantidad de un producto
+        /// 
+        /// Puede dar error si el usuario no existe, no es comprador, la publicación no existe,
+        /// el stock es insuficiente o el vendedor de la misma no existe.
+        #[ink(message)]
+        pub fn comprar_producto(&mut self, id_publicacion: u128, cantidad: u32) -> Result<u128, ErrorComprarProducto> {
+            self._comprar_producto(self.env().caller(), id_publicacion, cantidad)
+        }
+
+        ///////////////
+
+        /// Si la compra indicada está pendiente y el usuario es el vendedor, se establece como recibida.
+        /// 
+        /// Puede dar error si el usuario no está registrado, la compra no existe,
+        /// la compra no está pendiente, ya fue recibida, es el cliente quien intenta despacharla
+        /// o ya fue cancelada.
+        #[ink(message)]
+        pub fn compra_despachada(&mut self, compra_id: u128) -> Result<(), ErrorCompraDespachada> {
+            self._compra_despachada(self.env().caller(), compra_id)
+        }
+
+        ///////////////
+        
+        /// Si la compra indicada fue despachada y el usuario es el comprador, se establece como recibida.
+        /// 
+        /// Puede dar error si el usuario no está registrado, la compra no existe,
+        /// la compra no fue despachada, ya fue recibida, es el vendedor quien intenta recibirla
+        /// o ya fue cancelada.
+        #[ink(message)]
+        pub fn compra_recibida(&mut self, id_compra: u128) -> Result<(), ErrorCompraRecibida> {
+            self._compra_recibida(self.env().caller(), id_compra)
+        }
+
+        ///////////////
+        
+        /// Cancela la compra si ambos participantes de la misma ejecutan esta misma función
+        /// y si ésta no fue recibida ni ya cancelada.
+        /// 
+        /// Devuelve error si el usuario o la compra no existen, si el usuario no participa en la compra,
+        /// si la compra ya fue cancelada o recibida y si quien solicita la cancelación ya la solicitó antes.
+        #[ink(message)]
+        pub fn cancelar_compra(&mut self, id_compra: u128) -> Result<bool, ErrorCancelarCompra> {
+            self._cancelar_compra(self.env().caller(), id_compra)
+        }
+
+        //
+        // compra.rs: visualizar compras
         //
 
         /// Devuelve las compras del usuario que lo ejecuta
         /// 
         /// Dará error si el usuario no está registrado como comprador o no tiene compras
         #[ink(message)]
-        pub fn ver_compras(&self) -> Result<Vec<Compra>, ()> {
-            // self._ver_compras(self.env().caller())
-            todo!();
+        pub fn ver_compras(&self) -> Result<Vec<Compra>, ErrorVerCompras> {
+            self._ver_compras(self.env().caller())
         }
+
+        ///////////////
 
         /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
         /// 
         /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
         #[ink(message)]
-        pub fn ver_compras_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ()> {
-            // self._ver_compras_estado(self.env().caller())
-            todo!();
+        pub fn ver_compras_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ErrorVerCompras> {
+            self._ver_compras_estado(self.env().caller(), estado)
         }
 
         ///////////////
+
+        /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
+        /// 
+        /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
+        #[ink(message)]
+        pub fn ver_compras_categoria(&self, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerCompras> {
+            self._ver_compras_categoria(self.env().caller(), categoria)
+        }
+
+        //
+        // compras.rs: visualizar ventas
+        //
         
         /// Devuelve las ventas del usuario que lo ejecuta
         /// 
         /// Dará error si el usuario no está registrado como vendedor o no tiene ventas
         #[ink(message)]
-        pub fn ver_ventas(&self) -> Result<Vec<Compra>, ()> {
-            // self._ver_ventas(self.env().caller())
-            todo!();
+        pub fn ver_ventas(&self) -> Result<Vec<Compra>, ErrorVerVentas> {
+            self._ver_ventas(self.env().caller())
         }
+
+        ///////////////
 
         /// Devuelve las ventas del usuario que lo ejecuta que estén en el estado especificado
         /// 
         /// Dará error si el usuario no está registrado como vendedor o no tiene ventas en ese estado
         #[ink(message)]
-        pub fn ver_ventas_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ()> {
-            // self._ver_ventas_estado(self.env().caller(), estado)
-            todo!();
+        pub fn ver_ventas_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ErrorVerVentas> {
+            self._ver_ventas_estado(self.env().caller(), estado)
+        }
+
+        ///////////////
+
+        /// Devuelve las ventas del usuario que lo ejecuta que estén en el estado especificado
+        /// 
+        /// Dará error si el usuario no está registrado como vendedor o no tiene ventas en ese estado
+        #[ink(message)]
+        pub fn ver_ventas_categoria(&self, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerVentas> {
+            self._ver_ventas_categoria(self.env().caller(), categoria)
         }
 
         /// Devuelve la siguiente ID disponible para compras

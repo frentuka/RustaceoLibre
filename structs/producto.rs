@@ -21,13 +21,14 @@ pub enum CategoriaProducto {
 // producto
 //
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
 pub struct Producto {
+    pub vendedor: AccountId,
     pub nombre: String,
     pub descripcion: String,
     pub categoria: CategoriaProducto,
@@ -40,8 +41,9 @@ pub struct Producto {
 //
 
 impl Producto {
-    pub fn new(nombre: String, descripcion: String, categoria: CategoriaProducto, precio: u128, stock: u32) -> Self {
+    pub fn new(vendedor: AccountId, nombre: String, descripcion: String, categoria: CategoriaProducto, precio: u128, stock: u32) -> Self {
         Self {
+            vendedor,
             nombre,
             descripcion,
             categoria,
@@ -106,7 +108,12 @@ impl RustaceoLibre {
         // instanciar el producto y obtener id de publicacion
         let id_publicacion = self.next_id_publicaciones();
         let publicacion = Producto::new(
-            nombre, descripcion, categoria, precio, stock
+            caller,
+                        nombre,
+                        descripcion,
+                        categoria,
+                        precio,
+                        stock
         );
 
         // agregar al map principal

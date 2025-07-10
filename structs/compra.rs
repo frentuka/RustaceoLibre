@@ -4,8 +4,9 @@
 //
 
 use ink::primitives::AccountId;
+use ink::prelude::vec::Vec;
 
-use crate::rustaceo_libre::RustaceoLibre;
+use crate::{rustaceo_libre::RustaceoLibre, structs::producto::CategoriaProducto};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -73,7 +74,7 @@ impl Compra {
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
-pub enum ErrorRegistrarCompra {
+pub enum ErrorComprarProducto {
     UsuarioInexistente,
     UsuarioNoEsComprador,
     PublicacionInexistente,
@@ -95,13 +96,15 @@ pub enum ErrorCompraDespachada {
     EstadoNoPendiente,
 }
 
+// compra recibida
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
-pub enum ErrorRecibirCompra {
+pub enum ErrorCompraRecibida {
     UsuarioNoRegistrado, // de la compra
     CompraInexistente,
     SoloCompradorPuede,
@@ -109,6 +112,8 @@ pub enum ErrorRecibirCompra {
     CompraNoDespachada,
     CompraCancelada,
 }
+
+// cancelar compra
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -125,31 +130,63 @@ pub enum ErrorCancelarCompra {
     EsperandoConfirmacionMutua, // sólo si quien ya solicitó la cancelación es quien hace el llamado a cancelar
 }
 
+// ver compras
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub enum ErrorVerCompras {
+    UsuarioNoRegistrado,
+    NoEsComprador,
+    SinCompraVenta,
+}
+
+// ver ventas
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub enum ErrorVerVentas {
+    UsuarioNoRegistrado,
+    NoEsVendedor,
+    SinCompraVenta,
+}
+
 impl RustaceoLibre {
 
-    pub fn _comprar_producto(&mut self, comprador: AccountId, id_publicacion: u128, cantidad: u32) -> Result<u128, ErrorRegistrarCompra> {
-        //validar usuario 
-        let Some(comprador) = self.usuarios.get(comprador)
-        else { return Err(ErrorRegistrarCompra::UsuarioInexistente); };
+    /// Compra una cantidad de un producto
+    /// 
+    /// Puede dar error si el usuario no existe, no es comprador, la publicación no existe,
+    /// el stock es insuficiente o el vendedor de la misma no existe.
+    pub fn _comprar_producto(&mut self, caller: AccountId, id_publicacion: u128, cantidad: u32) -> Result<u128, ErrorComprarProducto> {
+        // validar usuario
+        let Some(comprador) = self.usuarios.get(caller)
+        else { return Err(ErrorComprarProducto::UsuarioInexistente); };
         
-        //validar rol
+        // validar rol
         if !comprador.es_comprador() {
-            return Err(ErrorRegistrarCompra::UsuarioNoEsComprador);
+            return Err(ErrorComprarProducto::UsuarioNoEsComprador);
         }
 
-        //validar publicacion
+        // validar publicacion
         let Some(publicacion) = self.publicaciones.get(&id_publicacion).cloned()
-        else { return Err(ErrorRegistrarCompra::PublicacionInexistente); };
+        else { return Err(ErrorComprarProducto::PublicacionInexistente); };
 
         // validar stock
         if publicacion.stock < cantidad {
-            return Err(ErrorRegistrarCompra::StockInsuficiente);
+            return Err(ErrorComprarProducto::StockInsuficiente);
         }
 
         // validar vendedor
         let vendedor_id = publicacion.vendedor;
         let Some(vendedor) = self.usuarios.get(vendedor_id)
-        else{ return Err(ErrorRegistrarCompra::VendedorInexistente);};
+        else{ return Err(ErrorComprarProducto::VendedorInexistente);};
 
         //
         // todo bien
@@ -158,7 +195,7 @@ impl RustaceoLibre {
 
         // último check
         let Some(resultado) = publicacion.stock.checked_sub(cantidad)
-        else {return Err(ErrorRegistrarCompra::StockInsuficiente);};
+        else {return Err(ErrorComprarProducto::StockInsuficiente);};
 
         // primer modificación
         let mut publicacion = publicacion;
@@ -197,15 +234,20 @@ impl RustaceoLibre {
         Ok(id_compra)
     }
 
+    //
 
-    // marca como despachado el estado de la compra, solo si es vendedor y no esta en estado pendiente
-    pub fn _compra_despachada(&mut self, caller: AccountId, compra_id: u128) -> Result<(), ErrorCompraDespachada> {
+    /// Si la compra indicada está pendiente y el usuario es el vendedor, se establece como recibida.
+    /// 
+    /// Puede dar error si el usuario no está registrado, la compra no existe,
+    /// la compra no está pendiente, ya fue recibida, es el cliente quien intenta despacharla
+    /// o ya fue cancelada.
+    pub fn _compra_despachada(&mut self, caller: AccountId, id_compra: u128) -> Result<(), ErrorCompraDespachada> {
         // validar usuario
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorCompraDespachada::UsuarioNoRegistrado); };
 
         // validar compra #1
-        let Some(compra) = usuario.compraventas.iter().find_map(|&id| if id == compra_id { Some(id) } else { None })
+        let Some(compra) = usuario.compraventas.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
         else { return Err(ErrorCompraDespachada::CompraInexistente) };
 
         // validar compra #2
@@ -236,26 +278,32 @@ impl RustaceoLibre {
         Ok(())
     }
 
-    // marca como entregado el estado de la compra, solo si es comprador y no esta en estado despachado
-    pub fn _compra_recibida(&mut self, caller: AccountId, id_compra: u128) -> Result<(), ErrorRecibirCompra> {
+    //
+
+    /// Si la compra indicada fue despachada y el usuario es el comprador, se establece como recibida.
+    /// 
+    /// Puede dar error si el usuario no está registrado, la compra no existe,
+    /// la compra no fue despachada, ya fue recibida, es el vendedor quien intenta recibirla
+    /// o ya fue cancelada.
+    pub fn _compra_recibida(&mut self, caller: AccountId, id_compra: u128) -> Result<(), ErrorCompraRecibida> {
         let Some(usuario) = self.usuarios.get(caller)
-        else { return Err(ErrorRecibirCompra::CompraInexistente); };
+        else { return Err(ErrorCompraRecibida::UsuarioNoRegistrado); };
 
         let Some(compra) = usuario.compraventas.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
-        else { return Err(ErrorRecibirCompra::CompraInexistente); };
+        else { return Err(ErrorCompraRecibida::CompraInexistente); };
 
         let Some(compra) = self.compras.get(&compra)
-        else { return Err(ErrorRecibirCompra::CompraInexistente); };
-
-        match compra.estado {
-            EstadoCompra::Pendiente => return Err(ErrorRecibirCompra::CompraNoDespachada),
-            EstadoCompra::Despachado => (),
-            EstadoCompra::Recibido => return Err(ErrorRecibirCompra::CompraYaRecibida),
-            EstadoCompra::Cancelado => return Err(ErrorRecibirCompra::CompraCancelada),
-        }
+        else { return Err(ErrorCompraRecibida::CompraInexistente); };
 
         if compra.comprador != caller {
-            return Err(ErrorRecibirCompra::SoloCompradorPuede);
+            return Err(ErrorCompraRecibida::SoloCompradorPuede);
+        }
+
+        match compra.estado {
+            EstadoCompra::Pendiente => return Err(ErrorCompraRecibida::CompraNoDespachada),
+            EstadoCompra::Despachado => (),
+            EstadoCompra::Recibido => return Err(ErrorCompraRecibida::CompraYaRecibida),
+            EstadoCompra::Cancelado => return Err(ErrorCompraRecibida::CompraCancelada),
         }
 
         let mut compra = compra.clone();
@@ -264,12 +312,14 @@ impl RustaceoLibre {
         Ok(())
     }
 
+    //
+
     /// Cancela la compra si ambos participantes de la misma ejecutan esta misma función
     /// y si ésta no fue recibida ni ya cancelada.
     /// 
     /// Devuelve error si el usuario o la compra no existen, si el usuario no participa en la compra,
     /// si la compra ya fue cancelada o recibida y si quien solicita la cancelación ya la solicitó antes.
-    pub fn _cancelar_compra(&mut self, id_compra: u128, caller: AccountId) -> Result<bool, ErrorCancelarCompra> {
+    pub fn _cancelar_compra(&mut self, caller: AccountId, id_compra: u128) -> Result<bool, ErrorCancelarCompra> {
         // validar usuario
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorCancelarCompra::UsuarioNoRegistrado); };
@@ -321,4 +371,123 @@ impl RustaceoLibre {
         // fin
         Ok(true)
     }
+
+    //
+
+    /// Devuelve las compras del usuario que lo ejecuta
+    /// 
+    /// Dará error si el usuario no está registrado como comprador o no tiene compras
+    pub fn _ver_compras(&self, caller: AccountId) -> Result<Vec<Compra>, ErrorVerCompras> {
+        let Some(usuario) = self.usuarios.get(caller)
+        else { return Err(ErrorVerCompras::UsuarioNoRegistrado) };
+
+        if !usuario.es_comprador() {
+            return Err(ErrorVerCompras::NoEsComprador);
+        }
+
+        let compras: Vec<Compra> = usuario.compraventas.iter().filter_map(|id_compraventa| {
+            let Some(compraventa) = self.compras.get(&id_compraventa)
+            else { return None };
+
+            if compraventa.comprador == caller {
+                 Some(compraventa)
+            } else {
+                None
+            }
+        }).cloned().collect();
+
+        if compras.is_empty() {
+            return Err(ErrorVerCompras::SinCompraVenta);
+        }
+
+        Ok(compras)
+    }
+
+    //
+
+    /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
+    /// 
+    /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
+    pub fn _ver_compras_estado(&self, caller: AccountId, estado: EstadoCompra) -> Result<Vec<Compra>, ErrorVerCompras> {
+        let compras = self._ver_compras(caller)?;
+        let compras = compras.iter().filter(|compra| compra.estado == estado).cloned().collect();
+        Ok(compras)
+    }
+
+    //
+
+    /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
+    /// 
+    /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
+    pub fn _ver_compras_categoria(&self, caller: AccountId, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerCompras> {
+        let compras = self._ver_compras(caller)?;
+        let compras = compras.iter().filter(|compra| {
+            let Some(publicacion) = self.publicaciones.get(&compra.publicacion)
+            else { return false };
+
+            publicacion.categoria == categoria
+        }).cloned().collect();
+        Ok(compras)
+    }
+
+    //
+
+    /// Devuelve las compras del usuario que lo ejecuta
+    /// 
+    /// Dará error si el usuario no está registrado como comprador o no tiene compras
+    pub fn _ver_ventas(&self, caller: AccountId) -> Result<Vec<Compra>, ErrorVerVentas> {
+        let Some(usuario) = self.usuarios.get(caller)
+        else { return Err(ErrorVerVentas::UsuarioNoRegistrado) };
+
+        if !usuario.es_vendedor() {
+            return Err(ErrorVerVentas::NoEsVendedor);
+        }
+        
+        let ventas: Vec<Compra> = usuario.compraventas.iter().filter_map(|id_compraventa| {
+            let Some(compraventa) = self.compras.get(&id_compraventa)
+            else { return None };
+
+            if compraventa.vendedor == caller {
+                 Some(compraventa) // venta
+            } else {
+                None
+            }
+        }).cloned().collect();
+
+        if ventas.is_empty() {
+            return Err(ErrorVerVentas::SinCompraVenta);
+        }
+
+        Ok(ventas)
+    }
+
+    //
+
+    /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
+    /// 
+    /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
+    pub fn _ver_ventas_estado(&self, caller: AccountId, estado: EstadoCompra) -> Result<Vec<Compra>, ErrorVerVentas> {
+        let ventas = self._ver_ventas(caller)?;
+        let ventas = ventas.iter().filter(|ventas| ventas.estado == estado).cloned().collect();
+        Ok(ventas)
+    }
+
+    //
+
+    /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
+    /// 
+    /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
+    pub fn _ver_ventas_categoria(&self, caller: AccountId, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerVentas> {
+        let ventas = self._ver_ventas(caller)?;
+        let ventas = ventas.iter().filter(|ventas| {
+            let Some(publicacion) = self.publicaciones.get(&ventas.publicacion)
+            else { return false };
+
+            publicacion.categoria == categoria
+        }).cloned().collect();
+        Ok(ventas)
+    }
+
+
+
 }
