@@ -30,7 +30,7 @@ pub enum Rol {
 pub struct Usuario {
     pub id: AccountId,
     pub rol: Rol,
-    pub compraventas: Option<Vec<u128>>, // Guarda compras y ventas. Si vendedor == id, Usuario es el vendedor. Caso contrario, es comprador.
+    pub compraventas: Vec<u128>, // Guarda compras y ventas. Si vendedor == id, Usuario es el vendedor. Caso contrario, es comprador.
     pub publicaciones: Option<Vec<u128>>,
 }
 
