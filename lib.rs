@@ -5,14 +5,12 @@ mod structs;
 #[allow(non_local_definitions)] // error molesto
 #[ink::contract]
 mod rustaceo_libre {
-    use ink::prelude::vec::Vec;
     use ink::storage::Mapping;
     use ink::prelude::collections::BTreeMap;
 
     // structs propias
     use crate::structs::usuario::{ErrorModificarRolUsuario, ErrorRegistrarUsuario, Rol, Usuario};
-    use crate::structs::publicacion::{ErrorRealizarPublicacion, Publicacion};
-    use crate::structs::producto::Producto;
+    use crate::structs::producto::{CategoriaProducto, ErrorRealizarPublicacion, ErrorVerProductosVendedor, Producto};
     use crate::structs::compra::Compra;
 
     //
@@ -27,7 +25,7 @@ mod rustaceo_libre {
         /// <ID, Compra>
         pub compras: BTreeMap<u128, Compra>,
         /// <ID, Publicacion>
-        pub publicaciones: BTreeMap<u128, Publicacion>,
+        pub publicaciones: BTreeMap<u128, Producto>,
         /// Lleva un recuento de la próxima ID disponible para los productos.
         pub publicaciones_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para las compras.
@@ -63,7 +61,7 @@ mod rustaceo_libre {
         }
 
         //
-        // impl publicos
+        // /structs/usuario.rs
         //
 
         /// Registra un usuario en el Mapping de usuarios.
@@ -84,14 +82,34 @@ mod rustaceo_libre {
             self._modificar_rol_usuario(self.env().caller(), rol)
         }
 
-        ///////////////
+        //
+        // /structs/vendedor.rs
+        //
 
         /// Realiza una publicación con producto, precio y cantidad.
         /// 
         /// Devuelve Error si el precio o la cantidad son 0, o si `caller` no existe o no es vendedor.
         #[ink(message)]
-        pub fn realizar_publicacion(&mut self, productos: Vec<Producto>, precio: Balance) -> Result<(), ErrorRealizarPublicacion> {
-            self._realizar_publicacion(self.env().caller(), productos, precio)
+        pub fn realizar_publicacion(&mut self, nombre: String, descripcion: String, categoria: CategoriaProducto, precio: Balance, stock: u32) -> Result<u128, ErrorRealizarPublicacion> {
+            self._realizar_publicacion(self.env().caller(), nombre, descripcion, categoria, precio, stock)
+        }
+
+        ///////////////
+        
+        /// Dada una ID, devuelve la publicación del producto si es posible
+        #[ink(message)]
+        pub fn ver_producto(&self, id_producto: u128) -> Option<Producto> {
+            self._ver_producto(id_producto).cloned()
+        }
+
+        ///////////////
+        
+        /// Devuelve todos los productos que correspondan al vendedor que ejecute esta función.
+        /// 
+        /// Dará error si el usuario no está registrado como vendedor o si no tiene publicaciones.
+        #[ink(message)]
+        pub fn ver_productos_vendedor(&self) -> Result<Vec<Producto>, ErrorVerProductosVendedor> {
+            self._ver_publicaciones_vendedor(self.env().caller())
         }
 
         ///////////////
