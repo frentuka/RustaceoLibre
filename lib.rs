@@ -6,7 +6,7 @@ mod structs;
 #[ink::contract]
 mod rustaceo_libre {
     use ink::storage::Mapping;
-    use ink::prelude::collections::BTreeMap;
+    use ink::prelude::{vec::Vec, string::String, collections::BTreeMap};
 
     // structs propias
     use crate::structs::usuario::{ErrorModificarRolUsuario, ErrorRegistrarUsuario, Rol, Usuario};
