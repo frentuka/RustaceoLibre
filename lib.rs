@@ -160,10 +160,10 @@ mod rustaceo_libre {
         #[ink::test]
         fn it_works() {
             let mut rustaceo_libre = RustaceoLibre::new();
-            assert_eq!(rustaceo_libre.next_id_compras(), Some(0));
-            assert_eq!(rustaceo_libre.next_id_compras(), Some(1));
-            assert_eq!(rustaceo_libre.next_id_publicaciones(), Some(0));
-            assert_eq!(rustaceo_libre.next_id_publicaciones(), Some(1));
+            assert_eq!(rustaceo_libre.next_id_compras(), 0);
+            assert_eq!(rustaceo_libre.next_id_compras(), 1);
+            assert_eq!(rustaceo_libre.next_id_publicaciones(), 0);
+            assert_eq!(rustaceo_libre.next_id_publicaciones(), 1);
         }
     }
 
