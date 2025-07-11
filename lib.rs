@@ -201,6 +201,8 @@ mod rustaceo_libre {
             operacion
         }
 
+        ///////////////
+
         /// Si la compra indicada está pendiente y el usuario es el vendedor, se establece como recibida.
         /// 
         /// Puede dar error si el usuario no está registrado, la compra no existe,
@@ -210,6 +212,8 @@ mod rustaceo_libre {
         pub fn compra_despachada(&mut self, compra_id: u128) -> Result<(), ErrorCompraDespachada> {
             self._compra_despachada(self.env().block_timestamp(), self.env().caller(), compra_id)
         }
+
+        ///////////////
         
         /// Si la compra indicada fue despachada y el usuario es el comprador, se establece como recibida.
         /// 
@@ -227,24 +231,25 @@ mod rustaceo_libre {
 
             Ok(())
         }
+
+        ///////////////
         
-        /// Cancela la compra si ésta no fue recibida ni ya cancelada
-        /// y si ambos participantes de la misma ejecutan esta misma función.
-        /// Entrega automáticamente los fondos de la compra al comprador.
+        /// Cancela la compra si ambos participantes de la misma ejecutan esta misma función
+        /// y si ésta no fue recibida ni ya cancelada.
         /// 
         /// Devuelve error si el usuario o la compra no existen, si el usuario no participa en la compra,
-        /// si la compra ya fue cancelada o recibida o si quien solicita la cancelación ya la solicitó antes.
+        /// si la compra ya fue cancelada o recibida y si quien solicita la cancelación ya la solicitó antes.
         #[ink(message)]
         pub fn cancelar_compra(&mut self, id_compra: u128) -> Result<bool, ErrorCancelarCompra> {
             let operacion = self._cancelar_compra(self.env().block_timestamp(), self.env().caller(), id_compra);
 
             let Ok(operacion) = operacion
-            else { return Err(operacion.unwrap_err()); };
+            else { return Err(operacion.unwrap_err()) };
 
-            let Some((id_comprador, valor)) = operacion
-            else { return Ok(false); };
+            let Some((comprador, valor)) = operacion
+            else { return Ok(false) };
 
-            let _ = self.env().transfer(id_comprador, valor);
+            let _ = self.env().transfer(comprador, valor);
 
             Ok(true)
         }
