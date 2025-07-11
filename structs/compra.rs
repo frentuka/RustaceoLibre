@@ -35,7 +35,8 @@ pub struct Compra {
     pub id: u128,
     pub timestamp: u64,
     pub publicacion: u128,
-    pub valor: u128,
+    pub cantidad_comprada: u32,
+    pub valor_total: u128,
     pub fondos_transferidos: bool,
     pub estado: EstadoCompra,
     pub comprador: AccountId,
@@ -54,12 +55,13 @@ Solo el Vendedor puede marcar como enviado.
 Solo el Comprador puede marcar como recibido o cancelada si aún está pendiente.
 Cancelación requiere consentimiento mutuo. */
 impl Compra {
-    pub fn new(id: u128, timestamp: u64, publicacion: u128, valor: u128, comprador: AccountId, vendedor: AccountId) -> Self {
+    pub fn new(id: u128, timestamp: u64, publicacion: u128, cantidad_comprada: u32, valor: u128, comprador: AccountId, vendedor: AccountId) -> Self {
         Self {
             id,
             timestamp,
             publicacion,
-            valor,
+            cantidad_comprada,
+            valor_total: valor,
             fondos_transferidos: false,
             estado: EstadoCompra::Pendiente(timestamp),
             comprador,
@@ -236,7 +238,7 @@ impl RustaceoLibre {
         //
 
         let id_compra = self.next_id_compras();
-        let compra = Compra::new(id_compra, timestamp, id_publicacion, valor_total_compra, comprador.id, id_vendedor);
+        let compra = Compra::new(id_compra, timestamp, id_publicacion, cantidad, valor_total_compra, comprador.id, id_vendedor);
 
         // añadir compra al mapping de compras
         self.compras.insert(id_compra, compra);
@@ -265,11 +267,12 @@ impl RustaceoLibre {
 
     /// Política de reclamo:
     /// 
-    /// Si el vendedor despachó la compra y el comprador no la marcó como recibida después de 30 días,
-    /// el comprador puede reclamar los fondos de la compra y la misma se marcará automáticamente como recibida.
+    /// Si el vendedor despachó la compra y el comprador no la marcó como recibida después de 60 días,
+    /// el comprador puede reclamar los fondos de la compra y la misma se marcará automáticamente como recibida,
+    /// sin necesidad de consentimiento ni voluntad del comprador.
     /// 
     /// Puede dar error si el usuario no está registrado, la compra no existe,
-    /// el usuario no es el vendedor de la compra o su reclamo no condice con la política de reclamo
+    /// el usuario no es el vendedor de la compra o la situación no condice con la política de reclamo
     pub fn _reclamar_fondos(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<u128, ErrorReclamarFondos> {
         // validar usuario
         if !self.usuarios.contains(caller) {
@@ -297,15 +300,15 @@ impl RustaceoLibre {
         let Some(elapsed_time) = timestamp.checked_sub(timestamp_despacho)
         else { return Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo) };
 
-        // 30 días: 1000ms*60s*60m*24h*30d
-        let time_millis_30_days = 2_592_000_000u64;
+        // 30 días: 1000ms*60s*60m*24h*60d
+        let time_millis_60_days = 5_184_000_000u64;
 
-        // validar politica de reclamo: 30 días desde despacho
-        if elapsed_time < time_millis_30_days {
+        // validar politica de reclamo: 60 días desde despacho
+        if elapsed_time < time_millis_60_days {
             return Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo);
         }
 
-        let valor_compra = compra.valor;
+        let valor_compra = compra.valor_total;
 
         // guardar compra
         let mut compra = compra;
@@ -397,7 +400,7 @@ impl RustaceoLibre {
         }
 
         let vendedor = compra.vendedor;
-        let valor_compra = compra.valor;
+        let valor_compra = compra.valor_total;
 
         let mut compra = compra.clone();
         compra.estado = EstadoCompra::Recibido(timestamp);
@@ -412,21 +415,11 @@ impl RustaceoLibre {
 
     /// Cancela la compra si ambos participantes de la misma ejecutan esta misma función
     /// y si ésta no fue recibida ni ya cancelada.
-    /// 
-    /// Excepción de unilateralidad:
-    ///  - El comprador puede cancelar la compra unilateralmente si pasaron 14 días sin ser despachada por el vendedor.
-    /// 
-    /// Fondos:
-    ///  - Si el comprador cancela la compra unilateralmente por haber pasado 14 días sin ser despachada,
-    ///     se le devolverán la totalidad de los fondos.
-    ///  - Si el comprador es el primero en solicitar la cancelación bilateral de la compra luego de ser despachada,
-    ///     en caso de que se cancele, éste recibirá el 90% del reembolso y el vendedor se quedará con el restante 10%.
-    ///  - Si el vendedor es el primero en solicitar la cancelación bilateral, aún luego de ser despachada,
-    ///     en caso de que se cancele, el comprador recibirá la totalidad de los fondos.
+    /// Entrega automáticamente los fondos de la compra al comprador.
     /// 
     /// Devuelve error si el usuario o la compra no existen, si el usuario no participa en la compra,
     /// si la compra ya fue cancelada o recibida y si quien solicita la cancelación ya la solicitó antes.
-    pub fn _cancelar_compra(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<bool, ErrorCancelarCompra> {
+    pub fn _cancelar_compra(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<Option<(AccountId, u128)>, ErrorCancelarCompra> {
         // validar usuario
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorCancelarCompra::UsuarioNoRegistrado); };
@@ -454,29 +447,6 @@ impl RustaceoLibre {
             EstadoCompra::Recibido(_) => return Err(ErrorCancelarCompra::CompraYaRecibida),
             EstadoCompra::Cancelado(_) => return Err(ErrorCancelarCompra::CompraYaCancelada),
         }
-
-        // Excepción de unilateralidad:
-        //  - El comprador puede cancelar la compra unilateralmente si pasaron 14 días sin ser despachada por el vendedor.
-        if compra.comprador == caller {
-            if let EstadoCompra::Despachado(timestamp_despacho) = compra.estado {
-                // 7 días: 1000ms*60s*60m*24h*14d
-                let time_millis_7_days = 1_209_600_000u64;
-                let tiempo_transcurrido = timestamp.checked_sub(timestamp_despacho);
-                // usar Some(tiempo_transcurrido) me obliga a returnar desde acá
-                if tiempo_transcurrido.is_some() {
-                    let tiempo_transcurrido = tiempo_transcurrido.unwrap();
-
-                    if tiempo_transcurrido > time_millis_7_days {
-                        // devolverle 90% al comprador
-                        // darle 10% al vendedor
-                        // cancelar compra
-                        // establecer fondos de la compra como transferidos
-
-                        return Ok(true)
-                    }
-                }
-            }
-        }
     
         //
         // validar si ya existe una solicitud de cancelación
@@ -487,7 +457,7 @@ impl RustaceoLibre {
         else {
             compra.primer_solicitud_cancelacion = Some(caller);
             self.compras.insert(compra.id, compra);
-            return Ok(false);
+            return Ok(None);
         };
 
         //
@@ -498,12 +468,25 @@ impl RustaceoLibre {
             return Err(ErrorCancelarCompra::EsperandoConfirmacionMutua);
         }
 
-        // insertar
+        let id_comprador = compra.comprador;
+        let valor_compra = compra.valor_total;
+
+        // modificar publicación: devolver stock
+        if let Some(mut publicacion) = self.publicaciones.get(&compra.publicacion).cloned() {
+            if let Some(nueva_cantidad_ofertada) = publicacion.cantidad_ofertada.checked_add(compra.cantidad_comprada) {
+                // modificar e insertar publicación con nueva cantidad ofertada
+                publicacion.cantidad_ofertada = nueva_cantidad_ofertada;
+                self.publicaciones.insert(compra.publicacion, publicacion);
+            }
+        } // si la publicacion no existe, el stock se pierde. para evitarlo debo agregar "id_producto" a compra
+
+        // modificar compra
         compra.estado = EstadoCompra::Cancelado(timestamp);
+        compra.fondos_transferidos = true;
         self.compras.insert(compra.id, compra);
 
-        // fin
-        Ok(true)
+        // fin. se devolverán fondos en lib.rs
+        Ok(Some((id_comprador, valor_compra)))
     }
 
     //
