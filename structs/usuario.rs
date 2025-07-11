@@ -3,18 +3,80 @@ use ink::{prelude::vec::Vec, primitives::AccountId};
 use crate::rustaceo_libre::RustaceoLibre;
 
 //
+// struct custom para almacenar stock de productos
+// no puedo utilizar Mapping en Usuario porque no implementa el trait Decode
+// los datos son privados porque se deben manejar con las funciones del impl StockProductos
+//
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub struct StockProductos {
+    productos: Vec<u128>,
+    stock: Vec<u32>
+}
+
+impl StockProductos {
+    /// Devuelve el stock asociado a la ID del producto brindada
+    fn get(&self, id_producto: &u128) -> Option<u32> {
+        let Ok(index) = self.productos.binary_search(id_producto)
+        else { return None };
+        self.stock.get(index).copied()
+    }
+
+    /// Inserta el producto en el vector doble. Si ya existe un producto con ese valor, lo sobreescribe.
+    /// Si no existe un producto con ese valor, inserta al final de la lista.
+    fn insert(&mut self, id_producto: u128, stock: u32) {
+        let index = self.productos.binary_search(&id_producto);
+        let index = match index {
+            Ok(index) => index,
+            Err(index) => {
+                // ya existe: eliminar ocurrencia actual
+                self.productos.remove(index);
+                self.stock.remove(index);
+                index
+            }
+        };
+
+        // insertar en su posición correspondiente
+        self.productos.insert(index, id_producto);
+        self.stock.insert(index, stock);
+    }
+}
+
+//
+// data vendedor
+//
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub struct DataVendedor {
+    pub ventas: Vec<u128>,
+    pub publicaciones: Vec<u128>,
+    pub stock_productos: StockProductos,
+}
+
+//
 // rol
 //
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
 pub enum Rol {
-    #[default]
-    Comprador, Vendedor, Ambos
+    Comprador(Vec<u128>), // compras
+    Vendedor(DataVendedor), // ventas, publicaciones, stock_productos
+    Ambos(Vec<u128>, DataVendedor), // compras, ventas, publicaciones, stock_productos
 }
 
 //
@@ -30,8 +92,6 @@ pub enum Rol {
 pub struct Usuario {
     pub id: AccountId,
     pub rol: Rol,
-    pub compraventas: Vec<u128>, // Guarda compras y ventas. Si vendedor == id, Usuario es el vendedor. Caso contrario, es comprador.
-    pub publicaciones: Option<Vec<u128>>,
 }
 
 //
@@ -39,21 +99,163 @@ pub struct Usuario {
 //
 
 impl Usuario {
+    /// Inicializa una nueva instancia de Usuario
     pub fn new(id: AccountId, rol: Rol) -> Self {
         Self {
             id,
             rol,
-            compraventas: Default::default(),
-            publicaciones: None,
         }
     }
 
+    /// Devuelve true si el rol del usuario es Comprador o Ambos
+    /// Devuelve false en caso contrario
     pub fn es_comprador(&self) -> bool {
-        self.rol == Rol::Comprador || self.rol == Rol::Ambos
+        match &self.rol {
+            Rol::Vendedor(_) => false,
+            _ => true,
+        }
     }
 
+    /// Devuelve true si el rol del usuario es Vendedor o Ambos
+    /// Devuelve false en caso contrario
     pub fn es_vendedor(&self) -> bool {
-        self.rol == Rol::Vendedor || self.rol == Rol::Ambos
+        match &self.rol {
+            Rol::Comprador(_) => false,
+            _ => true,
+        }
+    }
+
+    /// Devuelve las compras que haya realizado el usuario.
+    /// Devolverá None si no es comprador.
+    pub fn obtener_compras(&self) -> Option<Vec<u128>> {
+        match &self.rol {
+            Rol::Comprador(compras) => return Some(compras.clone()),
+            Rol::Vendedor(_) => return None,
+            Rol::Ambos(compras, _) => return Some(compras.clone()),
+        }
+    }
+
+    /// Devuelve el registro completo de DataVendedor del usuario.
+    /// Devolverá None si no es vendedor.
+    pub fn obtener_data_vendedor(&self) -> Option<DataVendedor> {
+        match &self.rol {
+            Rol::Comprador(_) => return None,
+            Rol::Vendedor(data_vendedor) => return Some(data_vendedor.clone()),
+            Rol::Ambos(_, data_vendedor) => return Some(data_vendedor.clone()),
+        }
+    }
+
+    /// Devuelve las ventas que haya realizado el usuario.
+    /// Devolverá None si no es vendedor.
+    pub fn obtener_ventas(&self) -> Option<Vec<u128>> {
+        match &self.rol {
+            Rol::Comprador(_) => return None,
+            Rol::Vendedor(data_vendedor) => return Some(data_vendedor.ventas.clone()),
+            Rol::Ambos(_, data_vendedor) => return Some(data_vendedor.ventas.clone()),
+        }
+    }
+
+    /// Devuelve las publicaciones que haya realizado el usuario.
+    /// Devolverá None si no es vendedor.
+    pub fn obtener_publicaciones(&self) -> Option<Vec<u128>> {
+        match &self.rol {
+            Rol::Comprador(_) => return None,
+            Rol::Vendedor(data_vendedor) => return Some(data_vendedor.publicaciones.clone()),
+            Rol::Ambos(_, data_vendedor) => return Some(data_vendedor.publicaciones.clone()),
+        }
+    }
+
+    /// Devuelve el stock de todos los productos que tenga el usuario.
+    /// Devolverá None si no es vendedor.
+    pub fn obtener_stock_productos(&self) -> Option<StockProductos> {
+        match &self.rol {
+            Rol::Comprador(_) => return None,
+            Rol::Vendedor(data_vendedor) => return Some(data_vendedor.stock_productos.clone()),
+            Rol::Ambos(_, data_vendedor) => return Some(data_vendedor.stock_productos.clone()),
+        }
+    }
+
+    /// Devuelve el stock de un producto que tenga el usuario.
+    /// Devolverá None si no es vendedor o si el mismo no tiene registro de stock del producto.
+    pub fn obtener_stock_producto(&self, id_producto: &u128) -> Option<u32> {
+        let stocks = self.obtener_stock_productos()?;
+        stocks.get(id_producto)
+    }
+
+    /// Añade una compra al vector de compras del rol del usuario.
+    /// Devuelve true si la compra pudo agregarse.
+    /// Devolverá false si esa compra ya está añadida o el usuario no es comprador.
+    /// No verifica que la compra exista.
+    pub fn agregar_compra(&mut self, id_compra: u128) -> bool {
+        let Some(mut nuevo_compras) = self.obtener_compras()
+        else { return false; };
+
+        nuevo_compras.push(id_compra);
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => Rol::Comprador(nuevo_compras),
+            Rol::Vendedor(_) => return false, // no debería nunca poder pasar
+            Rol::Ambos(_, data_vendedor) => Rol::Ambos(nuevo_compras, data_vendedor.clone()),
+        };
+
+        self.rol = nuevo_rol;
+        true
+    }
+
+    /// Añade una venta al vector de ventas del rol del usuario.
+    /// Devuelve true si la venta pudo agregarse.
+    /// Devolverá false si esa venta ya está añadida o el usuario no es vendedor.
+    /// No verifica que la venta exista.
+    pub fn agregar_venta(&mut self, id_venta: u128) -> bool {
+        let Some(mut nuevo_data_vendedor) = self.obtener_data_vendedor()
+        else { return false; };
+
+        nuevo_data_vendedor.ventas.push(id_venta);
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => return false,
+            Rol::Vendedor(_) => Rol::Vendedor(nuevo_data_vendedor), // no debería nunca poder pasar
+            Rol::Ambos(compras, _) => Rol::Ambos(compras.clone(), nuevo_data_vendedor),
+        };
+
+        self.rol = nuevo_rol;
+        true
+    }
+
+    /// Añade una publicación al vector de publicaciones del rol del usuario.
+    /// Devuelve true si la publicación pudo agregarse.
+    /// Devolverá false si esa publicación ya está añadida o el usuario no es vendedor.
+    /// No verifica que la publicación exista.
+    pub fn agregar_publicacion(&mut self, id_publicacion: u128) -> bool {
+        let Some(mut nuevo_data_vendedor) = self.obtener_data_vendedor()
+        else { return false; };
+
+        nuevo_data_vendedor.publicaciones.push(id_publicacion);
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => return false,
+            Rol::Vendedor(_) => Rol::Vendedor(nuevo_data_vendedor), // no debería nunca poder pasar
+            Rol::Ambos(compras, _) => Rol::Ambos(compras.clone(), nuevo_data_vendedor),
+        };
+
+        self.rol = nuevo_rol;
+        true
+    }
+
+    /// Modifica el stock de un producto en el mapa de stocks del rol del usuario.
+    /// Devuelve true si la el stock pudo modificarse.
+    /// Devolverá false si el usuario no es vendedor.
+    /// No verifica que el producto exista.
+    pub fn establecer_stock_producto(&mut self, id_producto: &u128, stock: &u32) -> bool {
+        let Some(mut nuevo_data_vendedor) = self.obtener_data_vendedor()
+        else { return false; };
+
+        nuevo_data_vendedor.stock_productos.insert(*id_producto, *stock);
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => return false,
+            Rol::Vendedor(_) => Rol::Vendedor(nuevo_data_vendedor), // no debería nunca poder pasar
+            Rol::Ambos(compras, _) => Rol::Ambos(compras.clone(), nuevo_data_vendedor),
+        };
+
+        self.rol = nuevo_rol;
+        true
     }
 }
 
@@ -77,9 +279,9 @@ pub enum ErrorRegistrarUsuario {
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
-pub enum ErrorModificarRolUsuario {
+pub enum ErrorAscenderRolUsuario {
     UsuarioInexistente,
-    MismoRolAsignado,
+    MaximoRolAsignado,
 }
 
 impl RustaceoLibre {
@@ -97,26 +299,24 @@ impl RustaceoLibre {
         Ok(())
     }
 
-    /// Recibe un rol y lo modifica para ese usuario si ya está registrado.
+    /// Si el usuario es Vendedor o Comprador, cambia su rol a Ambos sin perder información
     /// 
-    /// Devuelve error si el usuario no existe o ya posee ese rol.
-    pub fn _modificar_rol_usuario(&mut self, caller: AccountId, rol: Rol) -> Result<(), ErrorModificarRolUsuario> {
+    /// Devuelve error si el usuario no existe o ya posee el rol Ambos.
+    pub fn _ascender_rol_usuario(&mut self, caller: AccountId) -> Result<(), ErrorAscenderRolUsuario> {
         // si no existe, es imposible modificar
         let Some(usuario) = self.usuarios.get(caller)
         else {
-            return Err(ErrorModificarRolUsuario::UsuarioInexistente);
+            return Err(ErrorAscenderRolUsuario::UsuarioInexistente);
         };
 
-        // si ya posee ese rol, hacerlo saber
-        if usuario.rol == rol {
-            return Err(ErrorModificarRolUsuario::MismoRolAsignado)
-        }
+        let nuevo_rol = match &usuario.rol {
+            Rol::Comprador(compras) => Rol::Ambos(compras.clone(), Default::default()),
+            Rol::Vendedor(data_vendedor) => Rol::Ambos(Default::default(), data_vendedor.clone()),
+            _ => return Err(ErrorAscenderRolUsuario::MaximoRolAsignado),
+        };
 
-        // todo bien: asignar nuevo rol. creo que no se pueden hacer modificaciones directas
-        // normalmente obtendría usuario como mut (self.usuarios.get_mut()) y modificaría esa instancia mutable
-        // tengo entendido que no es posible, hay que modificar una copia y reemplazarlo
         let mut usuario = usuario;
-        usuario.rol = rol;
+        usuario.rol = nuevo_rol;
         self.usuarios.insert(caller, &usuario);
 
         Ok(())

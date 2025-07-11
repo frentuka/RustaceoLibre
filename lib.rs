@@ -13,13 +13,18 @@ mod rustaceo_libre {
         Usuario,
         Rol,
         ErrorRegistrarUsuario,
-        ErrorModificarRolUsuario,
+        ErrorAscenderRolUsuario,
     };
     use crate::structs::producto::{
         Producto,
         CategoriaProducto,
+        ErrorRegistrarProducto,
+    };
+    use crate::structs::publicacion::{
+        Publicacion,
         ErrorRealizarPublicacion,
-        ErrorVerProductosVendedor,
+        ErrorModificarCantidadOfertada,
+        ErrorVerPublicacionesVendedor
     };
     use crate::structs::compra::{
         Compra,
@@ -43,12 +48,16 @@ mod rustaceo_libre {
         pub usuarios: Mapping<AccountId, Usuario>,
         /// <ID, Compra>
         pub compras: BTreeMap<u128, Compra>,
+        /// <ID, Producto>
+        pub productos: BTreeMap<u128, Producto>,
         /// <ID, Publicacion>
-        pub publicaciones: BTreeMap<u128, Producto>,
-        /// Lleva un recuento de la próxima ID disponible para los productos.
-        pub publicaciones_siguiente_id: u128,
+        pub publicaciones: BTreeMap<u128, Publicacion>,
         /// Lleva un recuento de la próxima ID disponible para las compras.
-        pub compras_siguiente_id: u128,
+        compras_siguiente_id: u128,
+        /// Lleva un recuento de la próxima ID disponible para los productos.
+        productos_siguiente_id: u128,
+        /// Lleva un recuento de la próxima ID disponible para las publicaciones.
+        publicaciones_siguiente_id: u128,
         /// ID del dueño del contrato
         pub owner: AccountId,
     }
@@ -72,9 +81,11 @@ mod rustaceo_libre {
             Self {
                 usuarios: Default::default(),
                 compras: Default::default(),
+                productos: Default::default(),
                 publicaciones: Default::default(),
-                publicaciones_siguiente_id: 0,
                 compras_siguiente_id: 0,
+                productos_siguiente_id: 0,
+                publicaciones_siguiente_id: 0,
                 owner: Self::env().caller(),
             }
         }
@@ -91,44 +102,71 @@ mod rustaceo_libre {
             self._registrar_usuario(self.env().caller(), rol)
         }
 
-        ///////////////
-
         /// Recibe un rol y lo modifica para ese usuario si ya está registrado.
         /// 
         /// Devuelve error si el usuario no existe o ya posee ese rol.
         #[ink(message)]
-        pub fn modificar_rol_usuario(&mut self, rol: Rol) -> Result<(), ErrorModificarRolUsuario> {
-            self._modificar_rol_usuario(self.env().caller(), rol)
+        pub fn ascender_rol_usuario(&mut self) -> Result<(), ErrorAscenderRolUsuario> {
+            self._ascender_rol_usuario(self.env().caller())
         }
 
         //
-        // /structs/vendedor.rs
+        // /structs/publicacion.rs
         //
 
         /// Realiza una publicación con producto, precio y cantidad.
         /// 
         /// Devuelve Error si el precio o la cantidad son 0, o si `caller` no existe o no es vendedor.
         #[ink(message)]
-        pub fn realizar_publicacion(&mut self, nombre: String, descripcion: String, categoria: CategoriaProducto, precio: Balance, stock: u32) -> Result<u128, ErrorRealizarPublicacion> {
-            self._realizar_publicacion(self.env().caller(), nombre, descripcion, categoria, precio, stock)
+        pub fn realizar_publicacion(&mut self, id_producto: u128, cantidad_ofertada: u32, precio: Balance) -> Result<u128, ErrorRealizarPublicacion> {
+            self._realizar_publicacion(self.env().caller(), id_producto, cantidad_ofertada, precio)
         }
 
-        ///////////////
-        
-        /// Dada una ID, devuelve la publicación del producto si es posible
+        /// Modifica la cantidad ofertada en una publicación,
+        /// modificando también el stock del vendedor.
+        /// 
+        /// Devuelve Error si el usuario no está registrado, la venta no existe,
+        /// el usuario no es el vendedor o la operación es imposible por falta de stock/cantidad ofertada.
         #[ink(message)]
-        pub fn ver_producto(&self, id_producto: u128) -> Option<Producto> {
-            self._ver_producto(id_producto).cloned()
+        pub fn modificar_cantidad_ofertada(&mut self, id_publicacion: u128, nueva_cantidad_ofertada: u32) -> Result<(), ErrorModificarCantidadOfertada> {
+            self._modificar_cantidad_ofertada(self.env().caller(), id_publicacion, nueva_cantidad_ofertada)
         }
 
-        ///////////////
-        
+        /// Dada una ID, devuelve la publicación
+        /// 
+        /// Devolverá None si la publicación no existe o el usuario no está registrado
+        #[ink(message)]
+        pub fn ver_publicacion(&self, id_publicacion: u128) -> Option<Publicacion> {
+            self._ver_publicacion(self.env().caller(), id_publicacion)
+        }
+
         /// Devuelve todos los productos publicados por el usuario que lo ejecute
         /// 
         /// Dará error si el usuario no está registrado como vendedor o si no tiene publicaciones.
         #[ink(message)]
-        pub fn ver_productos_vendedor(&self) -> Result<Vec<Producto>, ErrorVerProductosVendedor> {
+        pub fn ver_publicaciones_vendedor(&self) -> Result<Vec<Publicacion>, ErrorVerPublicacionesVendedor> {
             self._ver_publicaciones_vendedor(self.env().caller())
+        }
+
+        //
+        // structs/producto.rs
+        //
+
+        /// Registra un producto en la lista de productos
+        /// para su posterior uso en publicaciones
+        /// 
+        /// Devuelve error si el usuario no está registrado o no es vendedor.
+        #[ink(message)]
+        pub fn registrar_producto(&mut self, nombre: String, descripcion: String, categoria: CategoriaProducto, stock_inicial: u32) -> Result<u128, ErrorRegistrarProducto> {
+            self._registrar_producto(self.env().caller(), nombre, descripcion, categoria, stock_inicial)
+        }
+        
+        /// Dada una ID, devuelve la publicación del producto
+        /// 
+        /// Devuelve None si el producto no existe
+        #[ink(message)]
+        pub fn ver_producto(&self, id_producto: u128) -> Option<Producto> {
+            self._ver_producto(self.env().caller(), id_producto)
         }
         
         //
@@ -258,6 +296,23 @@ mod rustaceo_libre {
             };
 
             self.compras_siguiente_id = add_res;
+            id // devolver
+        }
+
+        /// Devuelve la siguiente ID disponible para compras
+        /// 
+        /// Si la próxima ID causaría Overflow, devuelve 0 y reinicia la cuenta.
+        pub fn next_id_productos(&mut self) -> u128 {
+            let id = self.productos_siguiente_id; // obtener actual
+            let add_res = self.productos_siguiente_id.checked_add(1); // sumarle 1 al actual para que apunte a un id desocupado
+            
+            let Some(add_res) = add_res
+            else {
+                self.productos_siguiente_id = 1;
+                return 0;
+            };
+
+            self.productos_siguiente_id = add_res;
             id // devolver
         }
 

@@ -183,28 +183,22 @@ impl RustaceoLibre {
         let Some(publicacion) = self.publicaciones.get(&id_publicacion).cloned()
         else { return Err(ErrorComprarProducto::PublicacionInexistente); };
 
-        // validar stock
-        if publicacion.stock < cantidad {
-            return Err(ErrorComprarProducto::StockInsuficiente);
-        }
-
         // validar vendedor
-        let vendedor_id = publicacion.vendedor;
-        let Some(vendedor) = self.usuarios.get(vendedor_id)
+        let id_vendedor = publicacion.vendedor;
+        let Some(vendedor) = self.usuarios.get(id_vendedor)
         else{ return Err(ErrorComprarProducto::VendedorInexistente);};
+
+        // validar que la cantidad ofertada en la publicación sea <= a la cantidad comprada
+        let Some(nuevo_stock_publicacion) = publicacion.cantidad_ofertada.checked_sub(cantidad)
+        else { return Err(ErrorComprarProducto::StockInsuficiente); };
 
         //
         // todo bien
-        // quitar stock
         //
-
-        // último check
-        let Some(resultado) = publicacion.stock.checked_sub(cantidad)
-        else {return Err(ErrorComprarProducto::StockInsuficiente);};
 
         // primer modificación
         let mut publicacion = publicacion;
-        publicacion.stock = resultado;
+        publicacion.cantidad_ofertada = nuevo_stock_publicacion;
         self.publicaciones.insert(id_publicacion,publicacion);
 
         //
@@ -212,26 +206,26 @@ impl RustaceoLibre {
         //
 
         let id_compra = self.next_id_compras();
-        let compra = Compra::new(id_compra, id_publicacion, comprador.id, vendedor_id);
+        let compra = Compra::new(id_compra, id_publicacion, comprador.id, id_vendedor);
 
         // añadir compra al mapping de compras
         self.compras.insert(id_compra, compra);
 
         //
-        // actualizar compraventas al comprador
+        // actualizar compras al comprador
         //
 
         let mut comprador = comprador;
-        comprador.compraventas.push(id_compra);
+        comprador.agregar_compra(id_compra);
 
         self.usuarios.insert(comprador.id,&comprador);
 
         //
-        // actualizar compraventas al vendedor
+        // actualizar ventas al vendedor
         //
 
         let mut vendedor = vendedor;
-        vendedor.compraventas.push(id_compra);
+        vendedor.agregar_venta(id_compra);
 
         self.usuarios.insert(vendedor.id,&vendedor);
 
@@ -251,33 +245,37 @@ impl RustaceoLibre {
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorCompraDespachada::UsuarioNoRegistrado); };
 
-        // validar compra #1
-        let Some(compra) = usuario.compraventas.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
+        // validar venta #0
+        let Some(ventas) = usuario.obtener_compras()
+        else { return Err(ErrorCompraDespachada::CompraInexistente); };
+
+        // validar venta #1
+        let Some(venta) = ventas.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
         else { return Err(ErrorCompraDespachada::CompraInexistente) };
 
-        // validar compra #2
-        let Some(compra) = self.compras.get(&compra)
+        // validar venta #2
+        let Some(venta) = self.compras.get(&venta)
         else { return Err(ErrorCompraDespachada::CompraInexistente) };
 
-        // validar compra no cancelada
-        if compra.estado == EstadoCompra::Cancelado {
-            return Err(ErrorCompraDespachada::CompraCancelada);
-        }
-        
         // validar caller == vendedor
-        if compra.vendedor != caller {
+        if venta.vendedor != caller {
             return Err(ErrorCompraDespachada::SoloVendedorPuede);
         }
 
+        // validar compra no cancelada
+        if venta.estado == EstadoCompra::Cancelado {
+            return Err(ErrorCompraDespachada::CompraCancelada);
+        }
+
         // validar estado == pendiente
-        if compra.estado != EstadoCompra::Pendiente {
+        if venta.estado != EstadoCompra::Pendiente {
             return Err(ErrorCompraDespachada::EstadoNoPendiente);
         }
 
         // hacer cambios y guardar
-        let mut compra = compra.clone();
-        compra.estado = EstadoCompra::Despachado;
-        self.compras.insert(compra.id, compra);
+        let mut venta = venta.clone();
+        venta.estado = EstadoCompra::Despachado;
+        self.compras.insert(venta.id, venta);
 
         // fin
         Ok(())
@@ -294,7 +292,10 @@ impl RustaceoLibre {
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorCompraRecibida::UsuarioNoRegistrado); };
 
-        let Some(compra) = usuario.compraventas.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
+        let Some(compras) = usuario.obtener_compras()
+        else { return Err(ErrorCompraRecibida::CompraInexistente); };
+
+        let Some(compra) = compras.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
         else { return Err(ErrorCompraRecibida::CompraInexistente); };
 
         let Some(compra) = self.compras.get(&compra)
@@ -329,8 +330,12 @@ impl RustaceoLibre {
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorCancelarCompra::UsuarioNoRegistrado); };
 
+        // validar compra #0
+        let Some(compras) = usuario.obtener_compras()
+        else { return Err(ErrorCancelarCompra::CompraInexistente); };
+
         // validar compra #1
-        let Some(compra) = usuario.compraventas.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
+        let Some(compra) = compras.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
         else { return Err(ErrorCancelarCompra::CompraInexistente); };
 
         // validar compra #2
@@ -390,15 +395,13 @@ impl RustaceoLibre {
             return Err(ErrorVerCompras::NoEsComprador);
         }
 
-        let compras: Vec<Compra> = usuario.compraventas.iter().filter_map(|id_compraventa| {
-            let Some(compraventa) = self.compras.get(&id_compraventa)
-            else { return None };
+        let Some(compras) = usuario.obtener_compras()
+        else { return Err(ErrorVerCompras::SinCompraVenta); };
 
-            if compraventa.comprador == caller {
-                 Some(compraventa)
-            } else {
-                None
-            }
+        let compras: Vec<Compra> = compras.iter().filter_map(|id_compraventa| {
+            let Some(compra) = self.compras.get(&id_compraventa)
+            else { return None };
+            Some(compra)
         }).cloned().collect();
 
         if compras.is_empty() {
@@ -427,10 +430,16 @@ impl RustaceoLibre {
     pub fn _ver_compras_categoria(&self, caller: AccountId, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerCompras> {
         let compras = self._ver_compras(caller)?;
         let compras = compras.iter().filter(|compra| {
+            // obtener publicación desde id
             let Some(publicacion) = self.publicaciones.get(&compra.publicacion)
-            else { return false };
+            else { return false; };
 
-            publicacion.categoria == categoria
+            // obtener producto desde id
+            let Some(producto) = self.productos.get(&publicacion.producto)
+            else { return false; };
+
+            // fin
+            producto.categoria == categoria
         }).cloned().collect();
         Ok(compras)
     }
@@ -447,16 +456,14 @@ impl RustaceoLibre {
         if !usuario.es_vendedor() {
             return Err(ErrorVerVentas::NoEsVendedor);
         }
-        
-        let ventas: Vec<Compra> = usuario.compraventas.iter().filter_map(|id_compraventa| {
-            let Some(compraventa) = self.compras.get(&id_compraventa)
-            else { return None };
 
-            if compraventa.vendedor == caller {
-                 Some(compraventa) // venta
-            } else {
-                None
-            }
+        let Some(ventas) = usuario.obtener_ventas()
+        else { return Err(ErrorVerVentas::SinCompraVenta); };
+        
+        let ventas: Vec<Compra> = ventas.iter().filter_map(|id_compraventa| {
+            let Some(venta) = self.compras.get(&id_compraventa)
+            else { return None };
+            Some(venta)
         }).cloned().collect();
 
         if ventas.is_empty() {
@@ -485,10 +492,15 @@ impl RustaceoLibre {
     pub fn _ver_ventas_categoria(&self, caller: AccountId, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerVentas> {
         let ventas = self._ver_ventas(caller)?;
         let ventas = ventas.iter().filter(|ventas| {
+            // obtener publicacion desde id
             let Some(publicacion) = self.publicaciones.get(&ventas.publicacion)
             else { return false };
 
-            publicacion.categoria == categoria
+            // obtener producto desde id
+            let Some(producto) = self.productos.get(&publicacion.producto)
+            else { return false; };
+
+            producto.categoria == categoria
         }).cloned().collect();
         Ok(ventas)
     }

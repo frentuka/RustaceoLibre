@@ -1,4 +1,4 @@
-use ink::{prelude::vec::Vec, prelude::string::String, primitives::AccountId};
+use ink::{prelude::string::String, primitives::AccountId};
 
 use crate::rustaceo_libre::RustaceoLibre;
 
@@ -28,12 +28,9 @@ pub enum CategoriaProducto {
     derive(ink::storage::traits::StorageLayout)
 )]
 pub struct Producto {
-    pub vendedor: AccountId,
     pub nombre: String,
     pub descripcion: String,
     pub categoria: CategoriaProducto,
-    pub precio: u128,
-    pub stock: u32,
 }
 
 //
@@ -41,138 +38,68 @@ pub struct Producto {
 //
 
 impl Producto {
-    pub fn new(vendedor: AccountId, nombre: String, descripcion: String, categoria: CategoriaProducto, precio: u128, stock: u32) -> Self {
+    pub fn new(nombre: String, descripcion: String, categoria: CategoriaProducto) -> Self {
         Self {
-            vendedor,
             nombre,
             descripcion,
             categoria,
-            precio,
-            stock
         }
     }
 }
 
-//
-// impl Producto -> RustaceoLibre
-//
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
-pub enum ErrorRealizarPublicacion {
-    UsuarioInexistente,
+pub enum ErrorRegistrarProducto {
+    UsuarioNoRegistrado,
     NoEsVendedor,
-    StockCero,
-    PrecioCero,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[ink::scale_derive(Encode, Decode, TypeInfo)]
-#[cfg_attr(
-    feature = "std",
-    derive(ink::storage::traits::StorageLayout)
-)]
-pub enum ErrorVerProductosVendedor {
-    VendedorInexistente,
-    NoEsVendedor,
-    NoTieneVentas,
 }
 
 impl RustaceoLibre {
 
     //
 
-    /// Realiza una publicación con producto, precio y cantidad.
-    /// Devuelve Error si el precio o la cantidad son 0, o si `caller` no existe o no es vendedor.
-    pub(crate) fn _realizar_publicacion(&mut self, caller: AccountId, nombre: String, descripcion: String, categoria: CategoriaProducto, precio: u128, stock: u32) -> Result<u128, ErrorRealizarPublicacion> {
-        if precio == 0 {
-            return Err(ErrorRealizarPublicacion::PrecioCero);
-        }
-
-        if stock == 0 {
-            return Err(ErrorRealizarPublicacion::StockCero);
-        }
-        
-        let Some(mut vendedor) = self.usuarios.get(caller) else {
-            return Err(ErrorRealizarPublicacion::UsuarioInexistente);
-        };
-
-        if !vendedor.es_vendedor() {
-            return Err(ErrorRealizarPublicacion::NoEsVendedor);
-        }
-
-        // instanciar el producto y obtener id de publicacion
-        let id_publicacion = self.next_id_publicaciones();
-        let publicacion = Producto::new(
-            caller,
-                        nombre,
-                        descripcion,
-                        categoria,
-                        precio,
-                        stock
-        );
-
-        // agregar al map principal
-        self.publicaciones.insert(id_publicacion, publicacion);
-
-        // agregar al vendedor. primero: obtener publicaciones
-        let mut publicaciones = if let Some(publicaciones) = vendedor.publicaciones { publicaciones }
-        else { Default::default() };
-
-        publicaciones.push(id_publicacion);
-        // reemplazar publicaciones en vendedor
-        vendedor.publicaciones = Some(publicaciones);
-        // reemplazar vendedor en usuarios
-        self.usuarios.insert(vendedor.id, &vendedor);
-
-        // fin
-        Ok(id_publicacion)
-    }
-
-    //
-
-    // amaría usar &'a Producto pero ink! no soporta argumentos genéricos en general
-    /// Dada una ID, devuelve la publicación del producto si es posible
-    pub(crate) fn _ver_producto(&self, id_publicacion: u128) -> Option<&Producto> {
-        self.publicaciones.get(&id_publicacion)
-    }
-
-    //
-
-    /// Devuelve todos los productos que correspondan al vendedor que ejecute esta función.
+    /// Registra un producto en la lista de productos
+    /// para su posterior uso en publicaciones
     /// 
-    /// Dará error si el usuario no existe, no está registrado como vendedor o no tiene publicaciones.
-    pub(crate) fn _ver_publicaciones_vendedor(&self, caller: AccountId) -> Result<Vec<Producto>, ErrorVerProductosVendedor> {
-        let Some(caller) = self.usuarios.get(caller)
-        else { return Err(ErrorVerProductosVendedor::VendedorInexistente); };
+    /// Devuelve error si el usuario no está registrado o no es vendedor.
+    pub(crate) fn _registrar_producto(&mut self, caller: AccountId, nombre: String, descripcion: String, categoria: CategoriaProducto, stock_inicial: u32) -> Result<u128, ErrorRegistrarProducto> {
+        // validar usuario
+        let Some(mut usuario) = self.usuarios.get(caller)
+        else { return Err(ErrorRegistrarProducto::UsuarioNoRegistrado); };
 
-        if !caller.es_vendedor() {
-            return Err(ErrorVerProductosVendedor::NoEsVendedor);
+        // validar que sea vendedor
+        if !usuario.es_vendedor() {
+            return Err(ErrorRegistrarProducto::NoEsVendedor);
         }
 
-        let Some(publicaciones) = caller.publicaciones
-        else { return Err(ErrorVerProductosVendedor::NoTieneVentas); };
+        // obtener id e instanciar producto
+        let id_producto = self.next_id_productos();
+        let producto = Producto::new(nombre, descripcion, categoria);
 
-        if publicaciones.is_empty() {
-            return Err(ErrorVerProductosVendedor::NoTieneVentas);
+        // guardar producto
+        self.productos.insert(id_producto, producto);
+
+        // guardar stock inicial del producto en el vendedor
+        usuario.establecer_stock_producto(&id_producto, &stock_inicial);
+        self.usuarios.insert(caller, &usuario);
+
+        Ok(id_producto)
+    }
+
+    //
+
+    /// Dada una ID, devuelve el producto si es posible
+    /// 
+    /// Devolverá None si el producto no existe o el usuario no está registrado
+    pub(crate) fn _ver_producto(&self, caller: AccountId, id_producto: u128) -> Option<Producto> {
+        if !self.usuarios.contains(caller) {
+            return None;
         }
 
-        // todo bien
-        // mapear las publicaciones: Vec<u128> -> Vec<Producto> y devolver
-
-        let vec_publicaciones: Vec<Producto> = publicaciones.iter().filter_map(| p | {
-            self.publicaciones.get(p)
-        }).cloned().collect();
-
-        // si no está vacío, devolver
-        if vec_publicaciones.is_empty() {
-            Err(ErrorVerProductosVendedor::NoTieneVentas)
-        } else {
-            Ok(vec_publicaciones)
-        }
+        self.productos.get(&id_producto).cloned()
     }
 }
