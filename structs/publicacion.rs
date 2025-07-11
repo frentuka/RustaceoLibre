@@ -17,7 +17,7 @@ pub struct Publicacion {
     pub vendedor: AccountId,
     pub producto: u128,
     pub cantidad_ofertada: u32,
-    pub precio: u128,
+    pub precio_unitario: u128,
 }
 
 //
@@ -30,7 +30,7 @@ impl Publicacion {
             vendedor,
             producto,
             cantidad_ofertada,
-            precio,
+            precio_unitario: precio,
         }
     }
 }

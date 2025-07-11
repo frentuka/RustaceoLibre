@@ -27,14 +27,7 @@ mod rustaceo_libre {
         ErrorVerPublicacionesVendedor
     };
     use crate::structs::compra::{
-        Compra,
-        EstadoCompra,
-        ErrorComprarProducto,
-        ErrorCompraDespachada,
-        ErrorCompraRecibida,
-        ErrorCancelarCompra,
-        ErrorVerCompras,
-        ErrorVerVentas,
+        Compra, ErrorCancelarCompra, ErrorCompraDespachada, ErrorCompraRecibida, ErrorComprarProducto, ErrorReclamarFondos, ErrorVerCompras, ErrorVerVentas, EstadoCompra
     };
 
     //
@@ -177,9 +170,35 @@ mod rustaceo_libre {
         /// 
         /// Puede dar error si el usuario no existe, no es comprador, la publicación no existe,
         /// el stock es insuficiente o el vendedor de la misma no existe.
-        #[ink(message)]
+        #[ink(message, payable)]
         pub fn comprar_producto(&mut self, id_publicacion: u128, cantidad: u32) -> Result<u128, ErrorComprarProducto> {
-            self._comprar_producto(self.env().caller(), id_publicacion, cantidad)
+            let operacion = self._comprar_producto(self.env().block_timestamp(), self.env().caller(), id_publicacion, cantidad, self.env().transferred_value());
+            
+            // si la operación es erronea por cualquier motivo, devolver fondos
+            if operacion.is_err() {
+                let _ = self.env().transfer(self.env().caller(), self.env().transferred_value());
+            }
+            
+            operacion
+        }
+
+        /// Política de reclamo:
+        /// 
+        /// Si el vendedor despachó la compra y el comprador no la marcó como recibida después de 30 días,
+        /// el comprador puede reclamar los fondos de la compra y la misma se marcará automáticamente como recibida.
+        /// 
+        /// Puede dar error si el usuario no está registrado, la compra no existe,
+        /// el usuario no es el vendedor de la compra o su reclamo no condice con la política de reclamo
+        #[ink(message)]
+        pub fn reclamar_fondos(&mut self, id_compra: u128) -> Result<u128, ErrorReclamarFondos> {
+            let operacion = self._reclamar_fondos(self.env().block_timestamp(), self.env().caller(), id_compra);
+            
+            let Ok(valor) = operacion
+            else { return operacion };
+
+            let _ = self.env().transfer(self.env().caller(), valor);
+
+            operacion
         }
 
         ///////////////
@@ -191,7 +210,7 @@ mod rustaceo_libre {
         /// o ya fue cancelada.
         #[ink(message)]
         pub fn compra_despachada(&mut self, compra_id: u128) -> Result<(), ErrorCompraDespachada> {
-            self._compra_despachada(self.env().caller(), compra_id)
+            self._compra_despachada(self.env().block_timestamp(), self.env().caller(), compra_id)
         }
 
         ///////////////
@@ -203,7 +222,14 @@ mod rustaceo_libre {
         /// o ya fue cancelada.
         #[ink(message)]
         pub fn compra_recibida(&mut self, id_compra: u128) -> Result<(), ErrorCompraRecibida> {
-            self._compra_recibida(self.env().caller(), id_compra)
+            let operacion = self._compra_recibida(self.env().block_timestamp(), self.env().caller(), id_compra);
+
+            let Ok((vendedor, valor)) = operacion
+            else { return Err(operacion.unwrap_err()) };
+
+            let _ = self.env().transfer(vendedor, valor);
+
+            Ok(())
         }
 
         ///////////////
@@ -215,7 +241,15 @@ mod rustaceo_libre {
         /// si la compra ya fue cancelada o recibida y si quien solicita la cancelación ya la solicitó antes.
         #[ink(message)]
         pub fn cancelar_compra(&mut self, id_compra: u128) -> Result<bool, ErrorCancelarCompra> {
-            self._cancelar_compra(self.env().caller(), id_compra)
+            self._cancelar_compra(self.env().block_timestamp(), self.env().caller(), id_compra)
+
+
+
+
+
+
+
+
         }
 
         //
