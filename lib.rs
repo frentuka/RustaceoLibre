@@ -84,7 +84,7 @@ mod rustaceo_libre {
         }
 
         //
-        // /structs/usuario.rs
+        // /structs/usuario.rs    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
         /// Registra un usuario en el Mapping de usuarios.
@@ -104,7 +104,7 @@ mod rustaceo_libre {
         }
 
         //
-        // /structs/publicacion.rs
+        // /structs/publicacion.rs    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
         /// Realiza una publicación con producto, precio y cantidad.
@@ -142,7 +142,7 @@ mod rustaceo_libre {
         }
 
         //
-        // structs/producto.rs
+        // structs/producto.rs    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
         /// Registra un producto en la lista de productos
@@ -163,7 +163,7 @@ mod rustaceo_libre {
         }
         
         //
-        // compras.rs: administrar compras
+        // compras.rs: administrar compras    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
         /// Compra una cantidad de un producto
@@ -201,8 +201,6 @@ mod rustaceo_libre {
             operacion
         }
 
-        ///////////////
-
         /// Si la compra indicada está pendiente y el usuario es el vendedor, se establece como recibida.
         /// 
         /// Puede dar error si el usuario no está registrado, la compra no existe,
@@ -212,8 +210,6 @@ mod rustaceo_libre {
         pub fn compra_despachada(&mut self, compra_id: u128) -> Result<(), ErrorCompraDespachada> {
             self._compra_despachada(self.env().block_timestamp(), self.env().caller(), compra_id)
         }
-
-        ///////////////
         
         /// Si la compra indicada fue despachada y el usuario es el comprador, se establece como recibida.
         /// 
@@ -231,8 +227,6 @@ mod rustaceo_libre {
 
             Ok(())
         }
-
-        ///////////////
         
         /// Cancela la compra si ambos participantes de la misma ejecutan esta misma función
         /// y si ésta no fue recibida ni ya cancelada.
@@ -255,7 +249,7 @@ mod rustaceo_libre {
         }
 
         //
-        // compra.rs: visualizar compras
+        // compra.rs: visualizar compras    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
         /// Devuelve las compras del usuario que lo ejecuta
@@ -266,8 +260,6 @@ mod rustaceo_libre {
             self._ver_compras(self.env().caller())
         }
 
-        ///////////////
-
         /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
         /// 
         /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
@@ -275,8 +267,6 @@ mod rustaceo_libre {
         pub fn ver_compras_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ErrorVerCompras> {
             self._ver_compras_estado(self.env().caller(), estado)
         }
-
-        ///////////////
 
         /// Devuelve las compras del usuario que lo ejecuta que estén en el estado especificado
         /// 
@@ -287,7 +277,7 @@ mod rustaceo_libre {
         }
 
         //
-        // compras.rs: visualizar ventas
+        // compras.rs: visualizar ventas    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
         
         /// Devuelve las ventas del usuario que lo ejecuta
@@ -298,8 +288,6 @@ mod rustaceo_libre {
             self._ver_ventas(self.env().caller())
         }
 
-        ///////////////
-
         /// Devuelve las ventas del usuario que lo ejecuta que estén en el estado especificado
         /// 
         /// Dará error si el usuario no está registrado como vendedor o no tiene ventas en ese estado
@@ -308,8 +296,6 @@ mod rustaceo_libre {
             self._ver_ventas_estado(self.env().caller(), estado)
         }
 
-        ///////////////
-
         /// Devuelve las ventas del usuario que lo ejecuta que estén en el estado especificado
         /// 
         /// Dará error si el usuario no está registrado como vendedor o no tiene ventas en ese estado
@@ -317,6 +303,24 @@ mod rustaceo_libre {
         pub fn ver_ventas_categoria(&self, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerVentas> {
             self._ver_ventas_categoria(self.env().caller(), categoria)
         }
+
+        /// Ver la calificación histórica promedio del usuario como comprador.
+        /// 
+        /// Devolverá None si no es comprador o no tiene calificaciones.
+        #[ink(message)]
+        pub fn ver_calificacion_comprador(&self) -> Option<u8> {
+            self._ver_calificacion_comprador(self.env().caller())
+        }
+
+        /// Ver la calificación histórica promedio del usuario como vendedor.
+        /// 
+        /// Devolverá None si no es vendedor o no tiene calificaciones.
+        #[ink(message)]
+        pub fn ver_calificacion_vendedor(&self) -> Option<u8> {
+            self._ver_calificacion_vendedor(self.env().caller())
+        }
+
+////////////////////////////////////////////////////////////////////////////////
 
         /// Devuelve la siguiente ID disponible para compras
         /// 
@@ -393,78 +397,6 @@ mod rustaceo_libre {
             assert_eq!(rustaceo_libre.next_id_compras(), 1);
             assert_eq!(rustaceo_libre.next_id_publicaciones(), 0);
             assert_eq!(rustaceo_libre.next_id_publicaciones(), 1);
-        }
-    }
-
-
-    /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
-    ///
-    /// When running these you need to make sure that you:
-    /// - Compile the tests with the `e2e-tests` feature flag enabled (`--features e2e-tests`)
-    /// - Are running a Substrate node which contains `pallet-contracts` in the background
-    #[cfg(all(test, feature = "e2e-tests"))]
-    mod e2e_tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
-        use super::*;
-
-        /// A helper function used for calling contract messages.
-        use ink_e2e::ContractsBackend;
-
-        /// The End-to-End test `Result` type.
-        type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-        /// We test that we can upload and instantiate the contract using its default constructor.
-        #[ink_e2e::test]
-        async fn default_works(mut c: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let mut constructor = RustaceoLibreRef::default();
-
-            // // When
-            // let contract = c
-            //     .instantiate("RustaceoLibre", &ink_e2e::alice(), &mut constructor)
-            //     .submit()
-            //     .await
-            //     .expect("instantiate failed");
-            // let mut call_builder = contract.call_builder::<RustaceoLibre>();
-            //
-            // // Then
-            // let get = call_builder.next_id_compras();
-            // let get_result = c.call(&ink_e2e::alice(), &get).dry_run().await?;
-            // assert!(matches!(get_result.return_value(), Some(0)));
-
-            Ok(())
-        }
-
-        /// We test that we can read and write a value from the on-chain contract.
-        #[ink_e2e::test]
-        async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let mut constructor = RustaceoLibreRef::new();
-            // let contract = client
-            //     .instantiate("RustaceoLibre", &ink_e2e::bob(), &mut constructor)
-            //     .submit()
-            //     .await
-            //     .expect("instantiate failed");
-            // let mut call_builder = contract.call_builder::<RustaceoLibre>();
-            //
-            // let get = call_builder.next_id_compras();
-            // let get_result = client.call(&ink_e2e::bob(), &get).dry_run().await?;
-            // assert!(matches!(get_result.return_value(), Some(0)));
-            //
-            // // When
-            // let next_id_compras = call_builder.next_id_compras();
-            // let _flip_result = client
-            //     .call(&ink_e2e::bob(), &next_id_compras)
-            //     .submit()
-            //     .await
-            //     .expect("flip failed");
-            //
-            // // Then
-            // let get = call_builder.next_id_compras();
-            // let get_result = client.call(&ink_e2e::bob(), &get).dry_run().await?;
-            // assert!(matches!(get_result.return_value(), Some(1)));
-
-            Ok(())
         }
     }
 }
