@@ -1,12 +1,10 @@
+use ink::{primitives::AccountId, prelude::vec::Vec};
+
+use crate::{rustaceo_libre::RustaceoLibre, structs::producto::CategoriaProducto};
 
 //
 // estado compra
 //
-
-use ink::primitives::AccountId;
-use ink::prelude::vec::Vec;
-
-use crate::{rustaceo_libre::RustaceoLibre, structs::producto::CategoriaProducto};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -37,10 +35,12 @@ pub struct Compra {
     pub publicacion: u128,
     pub cantidad_comprada: u32,
     pub valor_total: u128,
-    pub fondos_transferidos: bool,
+    pub fondos_fueron_transferidos: bool,
     pub estado: EstadoCompra,
     pub comprador: AccountId,
     pub vendedor: AccountId,
+    pub calificacion_comprador: Option<u8>,
+    pub calificacion_vendedor: Option<u8>,
     primer_solicitud_cancelacion: Option<AccountId>, // Almacena la AccountId de quien solicitó la cancelación para verificar mutualidad.
 }
 
@@ -62,10 +62,12 @@ impl Compra {
             publicacion,
             cantidad_comprada,
             valor_total: valor,
-            fondos_transferidos: false,
+            fondos_fueron_transferidos: false,
             estado: EstadoCompra::Pendiente(timestamp),
             comprador,
             vendedor,
+            calificacion_comprador: None, // la calificación que dió el comprador
+            calificacion_vendedor: None,  // ídem pero vendedor
             primer_solicitud_cancelacion: None
         }
     }
@@ -183,7 +185,26 @@ pub enum ErrorReclamarFondos {
     EstadoNoEsDespachado,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub enum ErrorCalificarTransaccion {
+    CalificacionInvalida,
+    UsuarioNoRegistrado,
+    CompraInexistente,
+    CompraNoRecibida,
+    UsuarioNoParticipa,
+    UsuarioYaCalifico,
+    VendedorInexistente,
+    CompradorInexistente,
+}
+
 impl RustaceoLibre {
+
+    //
 
     /// Compra una cantidad de un producto
     /// 
@@ -265,6 +286,8 @@ impl RustaceoLibre {
         Ok(id_compra)
     }
 
+    //
+
     /// Política de reclamo:
     /// 
     /// Si el vendedor despachó la compra y el comprador no la marcó como recibida después de 60 días,
@@ -289,7 +312,7 @@ impl RustaceoLibre {
         }
 
         // validar que los fondos no hayan sido ya transferidos
-        if compra.fondos_transferidos {
+        if compra.fondos_fueron_transferidos {
             return Err(ErrorReclamarFondos::FondosYaTransferidos);
         }
 
@@ -312,7 +335,7 @@ impl RustaceoLibre {
 
         // guardar compra
         let mut compra = compra;
-        compra.fondos_transferidos = true;
+        compra.fondos_fueron_transferidos = true;
         compra.estado = EstadoCompra::Recibido(timestamp);
         self.compras.insert(id_compra, compra);
 
@@ -404,11 +427,85 @@ impl RustaceoLibre {
 
         let mut compra = compra.clone();
         compra.estado = EstadoCompra::Recibido(timestamp);
-        compra.fondos_transferidos = true;
+        compra.fondos_fueron_transferidos = true;
         self.compras.insert(compra.id, compra);
 
 
         Ok((vendedor, valor_compra))
+    }
+
+    //
+
+    /// Dada una ID de compra y una calificación, se califica la compra.
+    /// 
+    /// Devolverá error si el usuario no está registrado, la calificación no es válida (1..=5),
+    /// la compra no existe, la compra no fue recibida, el usuario ya calificó esta compra,
+    pub fn _calificar_transaccion(&mut self, caller: AccountId, id_compra: u128, calificacion: u8) -> Result<(), ErrorCalificarTransaccion> {
+        // verificar que la calificacion este en el rango permitido
+        if !(1..=5).contains(&calificacion) {
+            return Err(ErrorCalificarTransaccion::CalificacionInvalida);
+        }
+
+        // verificar usurio registrado
+        if !self.usuarios.contains(caller) {
+            return Err(ErrorCalificarTransaccion::UsuarioNoRegistrado);
+        }
+
+        // verificar compra existente
+        let Some(compra) = self.compras.get(&id_compra)
+        else { return Err(ErrorCalificarTransaccion::CompraInexistente); };
+
+        // verificar que haya sido recibida
+        if !matches!(compra.estado, EstadoCompra::Recibido(_)) {
+            return Err(ErrorCalificarTransaccion::CompraNoRecibida);
+        }
+
+        // procesar calificación del comprador
+        if compra.comprador == caller {
+            // verificar que no haya calificacion
+            if compra.calificacion_comprador.is_some() {
+                return Err(ErrorCalificarTransaccion::UsuarioYaCalifico);
+            }
+
+            // verificar comprador
+            let Some(mut vendedor) = self.usuarios.get(compra.vendedor)
+            else { return Err(ErrorCalificarTransaccion::VendedorInexistente); };
+
+            // realizar calificación y guardar
+            vendedor.calificar_como_vendedor(calificacion);
+            self.usuarios.insert(vendedor.id, &vendedor);
+
+            // guardar calificación en transaccion
+            let mut compra = compra.clone();
+            compra.calificacion_comprador = Some(calificacion);
+            self.compras.insert(compra.id, compra);
+            return Ok(())
+        }
+
+        // procesar calificación del vendedor
+        if compra.vendedor == caller {
+            // verificar que no haya calificacion
+            if compra.calificacion_vendedor.is_some() {
+                return Err(ErrorCalificarTransaccion::UsuarioYaCalifico);
+            }
+
+            // verificar comprador
+            let Some(mut comprador) = self.usuarios.get(compra.comprador)
+            else { return Err(ErrorCalificarTransaccion::CompradorInexistente); };
+
+            // realizar calificación y guardar
+            comprador.calificar_como_comprador(calificacion);
+            self.usuarios.insert(comprador.id, &comprador);
+
+            // guardar calificación en transaccion
+            let mut compra = compra.clone();
+            compra.calificacion_comprador = Some(calificacion);
+            self.compras.insert(compra.id, compra);
+            return Ok(())
+        }
+
+        // caller != compra.comprador && caller != compra.vendedor
+        Err(ErrorCalificarTransaccion::UsuarioNoParticipa)
     }
 
     //
@@ -482,7 +579,7 @@ impl RustaceoLibre {
 
         // modificar compra
         compra.estado = EstadoCompra::Cancelado(timestamp);
-        compra.fondos_transferidos = true;
+        compra.fondos_fueron_transferidos = true;
         self.compras.insert(compra.id, compra);
 
         // fin. se devolverán fondos en lib.rs
