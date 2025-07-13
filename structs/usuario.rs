@@ -29,22 +29,24 @@ impl StockProductos {
 
     /// Inserta el producto en el vector doble. Si ya existe un producto con ese valor, lo sobreescribe.
     /// Si no existe un producto con ese valor, inserta al final de la lista.
+    /// cambios aca !!!!!!!!!!!!
+    /// El método actual elimina elementos en el índice Err(index), que es incorrecto y causa pánico.
+    /// La solución es no eliminar nada en Err(index), solo insertar.
+    /// En Ok(index) actualizar el stock existente.
     fn insert(&mut self, id_producto: u128, stock: u32) {
-        let index = self.productos.binary_search(&id_producto);
-        let index = match index {
-            Ok(index) => index,
-            Err(index) => {
-                // ya existe: eliminar ocurrencia actual
-                self.productos.remove(index);
-                self.stock.remove(index);
-                index
-            }
-        };
-
-        // insertar en su posición correspondiente
-        self.productos.insert(index, id_producto);
-        self.stock.insert(index, stock);
+    match self.productos.binary_search(&id_producto) {
+        Ok(index) => {
+            // Producto ya existe: actualizar el stock
+            self.stock[index] = stock;
+        }
+        Err(index) => {
+            // Producto no existe: insertar en posición ordenada
+            self.productos.insert(index, id_producto);
+            self.stock.insert(index, stock);
+        }
     }
+}
+
 }
 
 //
