@@ -103,3 +103,35 @@ impl RustaceoLibre {
         self.productos.get(&id_producto).cloned()
     }
 }
+
+    /// Tests unitarios
+    /// 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_producto() {
+        let producto = Producto::new(
+            String::from("tv"),
+            String::from("smart"),
+            CategoriaProducto::Cat1,
+        );
+        assert_eq!(producto.nombre, String::from("tv"));
+        assert_eq!(producto.descripcion, String::from("smart"));
+        assert_eq!(producto.categoria, CategoriaProducto::Cat1);
+    }
+
+    #[test]
+    fn test_new_producto_cat_default() {
+        let producto = Producto::new(
+            String::from("tv"),
+            String::from("smart"),
+            CategoriaProducto::default(),
+        );
+        assert_eq!(producto.nombre, String::from("tv"));
+        assert_eq!(producto.descripcion, String::from("smart"));
+        assert_eq!(producto.categoria, CategoriaProducto::Otros);
+    }
+
+}
