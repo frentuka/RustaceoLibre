@@ -15,7 +15,9 @@ use crate::rustaceo_libre::RustaceoLibre;
 )]
 pub enum CategoriaProducto {
     #[default]
-    Otros, Cat1, Cat2
+    Hogar,
+    Tecnologia,
+    Ropa,
 }
 
 //
@@ -130,7 +132,7 @@ mod tests {
         // Registrar producto
         let nombre: String = "Mate".into();
         let descripcion : String= "Mate de calabaza forrado en cuero".into();
-        let categoria = CategoriaProducto::Cat1;
+        let categoria = CategoriaProducto::Hogar;
         let stock_inicial = 10;
         
         let result = contrato.registrar_producto(nombre.clone(), descripcion.clone(), categoria.clone(), stock_inicial);
@@ -162,7 +164,7 @@ mod tests {
 
         let nombre = "Mate".into();
         let descripcion = "De madera".into();
-        let categoria = CategoriaProducto::Otros;
+        let categoria = CategoriaProducto::Hogar;
         let stock_inicial = 10;
 
         let result = contrato._registrar_producto(caller, nombre, descripcion, categoria, stock_inicial);
@@ -180,7 +182,7 @@ mod tests {
 
         let nombre = "Mate".into();
         let descripcion = "De madera".into();
-        let categoria = CategoriaProducto::Otros;
+        let categoria = CategoriaProducto::Hogar;
         let stock_inicial = 10;
 
         let result = contrato._registrar_producto(caller, nombre, descripcion, categoria, stock_inicial);

@@ -710,3 +710,227 @@ impl RustaceoLibre {
     }
 
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::structs::{
+        producto::{CategoriaProducto},
+        usuario::Rol,
+    };
+
+    #[ink::test]
+    fn comprar_producto_funciona_correctamente() {
+        let mut contrato = RustaceoLibre::default();
+
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Registrar producto
+        let nombre = "Termo".into();
+        let descripcion = "Acero inoxidable".into();
+        let categoria = CategoriaProducto::Tecnologia;
+        let stock = 10;
+        let id_producto = contrato._registrar_producto(vendedor, nombre, descripcion, categoria, stock).unwrap();
+
+        // Realizar publicación
+        let precio_unitario = 100;
+        let cantidad_ofertada = 5;
+        let id_publicacion = contrato._realizar_publicacion(vendedor, id_producto, cantidad_ofertada, precio_unitario).unwrap();
+
+        // Comprar producto
+        let timestamp = 12345;
+        let cantidad = 2;
+        let valor_transferido = 200; // 2 * 100
+        let resultado = contrato._comprar_producto(timestamp, comprador, id_publicacion, cantidad, valor_transferido);
+
+        assert!(resultado.is_ok());
+        let id_compra = resultado.unwrap();
+
+        // Validar compra
+        let compra = contrato.compras.get(&id_compra).unwrap();
+        assert_eq!(compra.comprador, comprador);
+        assert_eq!(compra.vendedor, vendedor);
+        assert_eq!(compra.cantidad_comprada, cantidad);
+        assert_eq!(compra.valor_total, valor_transferido);
+    }
+
+    #[ink::test]
+    fn comprar_producto_falla_cantidad_cero() {
+        let mut contrato = RustaceoLibre::default();
+
+        let comprador = AccountId::from([0x1; 32]);
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Simular compra con cantidad = 0
+        let resultado = contrato._comprar_producto(0, comprador, 999, 0, 100);
+
+        assert_eq!(resultado, Err(ErrorComprarProducto::CantidadCero));
+    }
+    #[ink::test]
+    fn comprar_producto_falla_usuario_inexistente() {
+    let mut contrato = RustaceoLibre::default();
+
+    let comprador = AccountId::from([0x1; 32]); // No lo registramos
+
+    // Intentar comprar sin estar registrado
+    let resultado = contrato._comprar_producto(0, comprador, 999, 1, 100);
+
+    assert_eq!(resultado, Err(ErrorComprarProducto::UsuarioInexistente));
+    }
+    #[ink::test]
+    fn comprar_producto_falla_usuario_no_es_comprador() {
+        let mut contrato = RustaceoLibre::default();
+
+        let vendedor = AccountId::from([0x1; 32]);
+
+        // Registrar al usuario como VENDEDOR, no como comprador
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+
+        // Crear producto y publicarlo
+        let nombre = "Cuadro".into();
+        let descripcion = "Pintura".into();
+        let categoria = CategoriaProducto::Hogar;
+        let stock = 10;
+
+        let id_producto = contrato._registrar_producto(vendedor, nombre, descripcion, categoria, stock).unwrap();
+        let precio_unitario = 100;
+        let id_publicacion = contrato._realizar_publicacion(vendedor, id_producto, stock, precio_unitario).unwrap();
+
+        // El vendedor (no comprador) intenta comprar
+        let resultado = contrato._comprar_producto(0, vendedor, id_publicacion, 1, 100);
+
+        assert_eq!(resultado, Err(ErrorComprarProducto::UsuarioNoEsComprador));
+    }
+    #[ink::test]
+    fn comprar_producto_falla_publicacion_inexistente() {
+        let mut contrato = RustaceoLibre::default();
+
+        let comprador = AccountId::from([0x1; 32]);
+
+        // Registrar al usuario como Comprador
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Intentar comprar con una publicación que no existe
+        let id_publicacion_invalido = 999;
+        let resultado = contrato._comprar_producto(0, comprador, id_publicacion_invalido, 1, 100);
+
+        assert_eq!(resultado, Err(ErrorComprarProducto::PublicacionInexistente));
+    }
+    #[ink::test]
+    fn comprar_producto_falla_vendedor_inexistente() {
+        let mut contrato = RustaceoLibre::default();
+
+        let vendedor = AccountId::from([0x1; 32]);
+        let comprador = AccountId::from([0x2; 32]);
+
+        // Registrar ambos usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Registrar producto y publicación
+        let id_producto = contrato._registrar_producto(
+            vendedor,
+            "Mate".into(),
+            "Calabaza".into(),
+            CategoriaProducto::Hogar,
+            10,
+        ).unwrap();
+
+        let id_publicacion = contrato._realizar_publicacion(vendedor, id_producto, 5, 100).unwrap();
+
+        // Simular que el vendedor fue eliminado
+        contrato.usuarios.remove(vendedor);
+
+        // Comprar el producto
+        let resultado = contrato._comprar_producto(0, comprador, id_publicacion, 2, 200);
+
+        assert_eq!(resultado, Err(ErrorComprarProducto::VendedorInexistente));
+    }
+    #[ink::test]
+    fn comprar_producto_falla_stock_insuficiente() {
+        let mut contrato = RustaceoLibre::default();
+
+        let vendedor = AccountId::from([0x1; 32]);
+        let comprador = AccountId::from([0x2; 32]);
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Registrar producto y publicación con 5 unidades
+        let id_producto = contrato._registrar_producto(
+            vendedor,
+            "Lapicera".into(),
+            "Tinta negra".into(),
+            CategoriaProducto::Tecnologia,
+            5,
+        ).unwrap();
+
+        let id_publicacion = contrato._realizar_publicacion(vendedor, id_producto, 5, 50).unwrap();
+
+        // El comprador intenta comprar 10 unidades (más de las ofertadas)
+        let resultado = contrato._comprar_producto(0, comprador, id_publicacion, 10, 500);
+
+        assert_eq!(resultado, Err(ErrorComprarProducto::StockInsuficiente));
+    }
+    #[ink::test]
+    fn comprar_producto_falla_valor_transferido_insuficiente() {
+        let mut contrato = RustaceoLibre::default();
+
+        let vendedor = AccountId::from([0x1; 32]);
+        let comprador = AccountId::from([0x2; 32]);
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Registrar producto y publicación
+        let id_producto = contrato._registrar_producto(
+            vendedor,
+            "Cuaderno".into(),
+            "Rayado".into(),
+            CategoriaProducto::Hogar,
+            5,
+        ).unwrap();
+
+        let id_publicacion = contrato._realizar_publicacion(vendedor, id_producto, 5, 100).unwrap();
+
+        // Intentar comprar 2 unidades con solo 150 transferidos (se necesitan 200)
+        let resultado = contrato._comprar_producto(0, comprador, id_publicacion, 2, 150);
+
+        assert_eq!(resultado, Err(ErrorComprarProducto::ValorTransferidoInsuficiente));
+    }
+    #[ink::test]
+    fn comprar_producto_falla_error_desconocido() {
+        let mut contrato = RustaceoLibre::default();
+
+        let vendedor = AccountId::from([0x1; 32]);
+        let comprador = AccountId::from([0x2; 32]);
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Registrar producto y publicación con precio máximo
+        let id_producto = contrato._registrar_producto(
+            vendedor,
+            "NFT".into(),
+            "Muy caro".into(),
+            CategoriaProducto::Tecnologia,
+            5,
+        ).unwrap();
+
+        let precio_unitario = u128::MAX;
+        let id_publicacion = contrato._realizar_publicacion(vendedor, id_producto, 5, precio_unitario).unwrap();
+
+        // Intentar comprar 2 (precio_unitario * 2) → overflow
+        let resultado = contrato._comprar_producto(0, comprador, id_publicacion, 2, u128::MAX);
+
+        assert_eq!(resultado, Err(ErrorComprarProducto::Desconocido));
+    }
+}
