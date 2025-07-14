@@ -103,6 +103,11 @@ impl RustaceoLibre {
             return Err(ErrorRealizarPublicacion::PrecioCero);
         }
 
+        //verificar cantidad ofertada
+        if cantidad_ofertada == 0{
+            return Err(ErrorRealizarPublicacion::StockInsuficiente);
+        }
+
         // validar usuario
         let Some(mut usuario) = self.usuarios.get(caller) else {
             return Err(ErrorRealizarPublicacion::UsuarioNoRegistrado);
@@ -197,6 +202,11 @@ impl RustaceoLibre {
         let mut usuario = usuario;
         publicacion.cantidad_ofertada = nueva_cantidad_ofertada;
         usuario.establecer_stock_producto(&publicacion.producto, &nuevo_stock_vendedor);
+
+        // actualizado:
+        // se modificaba publicacion.cantidad_ofertada localmente, pero no se guardaba la publicación actualizada en self.publicaciones ni en self.usuarios
+        self.publicaciones.insert(id_publicacion, publicacion);
+        self.usuarios.insert(usuario.id, &usuario);
 
         Ok(())
     }
@@ -394,5 +404,257 @@ mod tests {
         let updated_user = rustaceo.usuarios.get(caller).unwrap();
         let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
         assert_eq!(updated_stock, 5); // 15 - 10
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_usuario_inexistente() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15);
+        assert!(matches!(result, Err(ErrorModificarCantidadOfertada::UsuarioInexistente)));
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_no_es_vendedor() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
+            compras: Vec::new(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        rustaceo.usuarios.insert(caller, &usuario);
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15);
+        assert!(matches!(result, Err(ErrorModificarCantidadOfertada::NoEsVendedor)));
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_publicacion_inexistente() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(),
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        rustaceo.usuarios.insert(caller, &usuario);
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15);
+        assert!(matches!(result, Err(ErrorModificarCantidadOfertada::PublicacionInexistente)));
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_no_es_el_vendedor() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let otro_vendedor = AccountId::from([0x2; 32]);
+        let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(),
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        rustaceo.usuarios.insert(caller, &usuario);
+        let publicacion = Publicacion::new(otro_vendedor, 1, 10, 100);
+        rustaceo.publicaciones.insert(0, publicacion);
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15);
+        assert!(matches!(result, Err(ErrorModificarCantidadOfertada::NoEsElVendedor)));
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_sin_cambios() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(),
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        usuario.establecer_stock_producto(&1, &15);
+        rustaceo.usuarios.insert(caller, &usuario);
+        let publicacion = Publicacion::new(caller, 1, 10, 100);
+        rustaceo.publicaciones.insert(0, publicacion);
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 10);
+        assert!(matches!(result, Err(ErrorModificarCantidadOfertada::SinCambios)));
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_success_increase() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(),
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        usuario.establecer_stock_producto(&1, &15); // Stock suficiente
+        rustaceo.usuarios.insert(caller, &usuario);
+        let publicacion = Publicacion::new(caller, 1, 10, 100);
+        rustaceo.publicaciones.insert(0, publicacion);
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 12); // Aumenta de 10 a 12
+        assert!(result.is_ok());
+        let updated_pub = rustaceo.publicaciones.get(&0).unwrap();
+        assert_eq!(updated_pub.cantidad_ofertada, 12);
+        let updated_user = rustaceo.usuarios.get(caller).unwrap();
+        let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
+        assert_eq!(updated_stock, 13); // 15 - (12 - 10) = 13
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_success_decrease() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(),
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        usuario.establecer_stock_producto(&1, &5); // Stock inicial
+        rustaceo.usuarios.insert(caller, &usuario);
+        let publicacion = Publicacion::new(caller, 1, 10, 100);
+        rustaceo.publicaciones.insert(0, publicacion);
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 8); // Disminuye de 10 a 8
+        assert!(result.is_ok());
+        let updated_pub = rustaceo.publicaciones.get(&0).unwrap();
+        assert_eq!(updated_pub.cantidad_ofertada, 8); // Now should pass with insert
+        let updated_user = rustaceo.usuarios.get(caller).unwrap();
+        let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
+        assert_eq!(updated_stock, 7); // 5 + (10 - 8) = 7
+    }
+
+    #[ink::test]
+    fn test_modificar_cantidad_ofertada_stock_vendedor_insuficiente() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(),
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        usuario.establecer_stock_producto(&1, &5); // Stock insuficiente
+        rustaceo.usuarios.insert(caller, &usuario);
+        let publicacion = Publicacion::new(caller, 1, 10, 100);
+        rustaceo.publicaciones.insert(0, publicacion);
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+
+        let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15); // Aumenta a 15
+        assert!(result.is_ok());
+        let updated_pub = rustaceo.publicaciones.get(&0).unwrap();
+        assert_eq!(updated_pub.cantidad_ofertada, 15); // Verifica que se actualice a 15
+        let updated_user = rustaceo.usuarios.get(caller).unwrap();
+        let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
+        assert_eq!(updated_stock, 0); // 5 - 5 = 0
+    }
+
+    #[ink::test]
+    fn test_ver_publicacion_usuario_no_registrado() {
+        let rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+
+        let result = rustaceo._ver_publicacion(caller, 0);
+        assert!(result.is_none());
+    }
+
+    #[ink::test]
+    fn test_ver_publicacion_publicacion_inexistente() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(),
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        rustaceo.usuarios.insert(caller, &usuario);
+
+        let result = rustaceo._ver_publicacion(caller, 0);
+        assert!(result.is_none());
+    }
+
+    #[ink::test]
+    fn test_ver_publicaciones_vendedor_usuario_no_registrado() {
+        let rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+
+        let result = rustaceo._ver_publicaciones_vendedor(caller);
+        assert!(matches!(result, Err(ErrorVerPublicacionesVendedor::UsuarioNoRegistrado)));
+    }
+
+    #[ink::test]
+    fn test_ver_publicaciones_vendedor_no_es_vendedor() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
+            compras: Vec::new(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        rustaceo.usuarios.insert(caller, &usuario);
+
+        let result = rustaceo._ver_publicaciones_vendedor(caller);
+        assert!(matches!(result, Err(ErrorVerPublicacionesVendedor::NoEsVendedor)));
+    }
+    
+    #[ink::test]
+    fn test_ver_publicaciones_vendedor_no_tiene_publicaciones() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: Vec::new(), // Sin publicaciones
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        rustaceo.usuarios.insert(caller, &usuario);
+
+        let result = rustaceo._ver_publicaciones_vendedor(caller);
+        assert!(matches!(result, Err(ErrorVerPublicacionesVendedor::NoTienePublicaciones)));
+    }
+
+    #[ink::test]
+    fn test_ver_publicaciones_vendedor_success() {
+        let mut rustaceo = RustaceoLibre::new();
+        let caller = AccountId::from([0x1; 32]);
+        let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
+            ventas: Vec::new(),
+            publicaciones: vec![0], // Con una publicación
+            stock_productos: StockProductos::default(),
+            total_calificaciones: 0,
+            cant_calificaciones: 0,
+        }));
+        rustaceo.usuarios.insert(caller, &usuario);
+        let publicacion = Publicacion::new(caller, 1, 10, 100);
+        rustaceo.publicaciones.insert(0, publicacion);
+
+        let result = rustaceo._ver_publicaciones_vendedor(caller);
+        assert!(result.is_ok());
+        let publicaciones = result.unwrap();
+        assert_eq!(publicaciones.len(), 1);
+        let publicacion = &publicaciones[0];
+        assert_eq!(publicacion.vendedor, caller);
+        assert_eq!(publicacion.producto, 1);
+        assert_eq!(publicacion.cantidad_ofertada, 10);
+        assert_eq!(publicacion.precio_unitario, 100);
     }
 }
