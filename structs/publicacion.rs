@@ -353,7 +353,7 @@ mod tests {
         }));
         usuario.establecer_stock_producto(&1, &5); // Stock menor que cantidad ofertada
         rustaceo.usuarios.insert(caller, &usuario);
-        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 100);
         assert!(matches!(result, Err(ErrorRealizarPublicacion::StockInsuficiente)));
@@ -390,7 +390,7 @@ mod tests {
         }));
         usuario.establecer_stock_producto(&1, &15); // Stock inicial > cantidad ofertada
         rustaceo.usuarios.insert(caller, &usuario);
-        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 100);
         assert!(result.is_ok());
@@ -502,7 +502,7 @@ mod tests {
         rustaceo.usuarios.insert(caller, &usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
-        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
 
         let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 12); // Aumenta de 10 a 12
         assert!(result.is_ok());
@@ -528,7 +528,7 @@ mod tests {
         rustaceo.usuarios.insert(caller, &usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
-        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
 
         let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 8); // Disminuye de 10 a 8
         assert!(result.is_ok());
@@ -554,7 +554,7 @@ mod tests {
         rustaceo.usuarios.insert(caller, &usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
-        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Cat1));
+        rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
 
         let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15); // Aumenta a 15
         assert!(result.is_ok());
