@@ -356,7 +356,7 @@ impl RustaceoLibre {
         else { return Err(ErrorCompraDespachada::UsuarioNoRegistrado); };
 
         // validar venta #0
-        let Some(ventas) = usuario.obtener_compras()
+        let Some(ventas) = usuario.obtener_ventas()
         else { return Err(ErrorCompraDespachada::CompraInexistente); };
 
         // validar venta #1
@@ -716,8 +716,9 @@ mod tests {
     use super::*;
     use crate::structs::{
         producto::{CategoriaProducto},
-        usuario::Rol,
+        usuario::{Rol},
     };
+    use ink::primitives::AccountId;
 
     #[ink::test]
     fn comprar_producto_funciona_correctamente() {
@@ -758,7 +759,6 @@ mod tests {
         assert_eq!(compra.cantidad_comprada, cantidad);
         assert_eq!(compra.valor_total, valor_transferido);
     }
-
     #[ink::test]
     fn comprar_producto_falla_cantidad_cero() {
         let mut contrato = RustaceoLibre::default();
@@ -933,4 +933,424 @@ mod tests {
 
         assert_eq!(resultado, Err(ErrorComprarProducto::Desconocido));
     }
+    #[ink::test]
+    fn reclamar_fondos_exitoso() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+
+        // Simulación de cuentas
+        let vendedor = AccountId::from([0x01; 32]);
+        let comprador = AccountId::from([0x02; 32]);
+        let id_compra = 0;
+        let valor_total = 1000;
+        let timestamp_despacho = 1_000_000;
+        let timestamp_actual = timestamp_despacho + 5_184_000_000; // 60 días
+
+        // Registrar vendedor y comprador
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Crear compra
+        let compra = Compra {
+            id: id_compra,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+        contrato.compras.insert(id_compra, compra);
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Ok(valor_total));
+
+        // Confirmar que la compra fue marcada como recibida y fondos transferidos
+        let actualizada = contrato.compras.get(&id_compra).unwrap();
+        assert!(actualizada.fondos_fueron_transferidos);
+        assert_eq!(actualizada.estado, EstadoCompra::Recibido(timestamp_actual));
+    }
+    #[ink::test]
+    fn reclamar_fondos_usuario_no_registrado() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+
+        // Crear ID de compra válido y simular una compra
+        let comprador = AccountId::from([0x02; 32]);
+        let vendedor = AccountId::from([0x01; 32]);
+        let id_compra = 0;
+        let valor_total = 1000;
+        let timestamp_despacho = 1_000_000;
+        let timestamp_actual = timestamp_despacho + 5_184_000_000;
+
+        // Registrar solo al comprador y no al vendedor
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Insertar la compra directamente
+        contrato.compras.insert(id_compra, Compra {
+            id: id_compra,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::UsuarioNoRegistrado));
+    }
+    #[ink::test]
+    fn reclamar_fondos_compra_no_existe() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+        let vendedor = AccountId::from([0x01; 32]);
+        let timestamp_actual = 6_184_000_000;
+        let id_compra_inexistente = 999;
+
+        // Registrar al vendedor
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+
+        // No se inserta ninguna compra
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra_inexistente);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::CompraNoExiste));
+    }
+    #[ink::test]
+    fn reclamar_fondos_no_es_el_vendedor() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+        let comprador = AccountId::from([0x01; 32]);
+        let vendedor_real = AccountId::from([0x02; 32]);
+        let caller_falso = comprador; // el que intenta reclamar sin ser el vendedor
+        let id_compra = 0;
+        let timestamp_despacho = 0;
+        let timestamp_actual = 6_184_000_000; // más de 60 días
+
+        // Registrar ambos usuarios
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor_real, Rol::Vendedor(Default::default())).unwrap();
+
+        // Crear compra despachada, pero el caller no es el vendedor
+        let compra = Compra {
+            id: id_compra,
+            timestamp: timestamp_despacho,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor: vendedor_real,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+        contrato.compras.insert(id_compra, compra);
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, caller_falso, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::NoEsElVendedor));
+    }
+    #[ink::test]
+    fn reclamar_fondos_ya_transferidos() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+        let vendedor = AccountId::from([0x02; 32]);
+        let comprador = AccountId::from([0x01; 32]);
+        let id_compra = 0;
+        let timestamp_despacho = 0;
+        let timestamp_actual = 6_184_000_000; // más de 60 días
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Crear compra con fondos ya transferidos
+        let compra = Compra {
+            id: id_compra,
+            timestamp: timestamp_despacho,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: true, // importante
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+        contrato.compras.insert(id_compra, compra);
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::FondosYaTransferidos));
+    }
+    #[ink::test]
+    fn reclamar_fondos_estado_incorrecto() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+        let vendedor = AccountId::from([0x02; 32]);
+        let comprador = AccountId::from([0x01; 32]);
+        let id_compra = 0;
+        let timestamp_despacho = 0;
+        let timestamp_actual = 6_184_000_000; // > 60 días
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Crear compra en estado incorrecto (Pendiente)
+        let compra = Compra {
+            id: id_compra,
+            timestamp: timestamp_despacho,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Pendiente(timestamp_despacho), // debería ser Despachado
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+        contrato.compras.insert(id_compra, compra);
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::EstadoNoEsDespachado));
+    }
+    #[ink::test]
+    fn reclamar_fondos_antes_de_tiempo() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+        let vendedor = AccountId::from([0x02; 32]);
+        let comprador = AccountId::from([0x01; 32]);
+        let id_compra = 0;
+        let timestamp_despacho = 0;
+        let timestamp_actual = 2_000_000_000; // menos de 60 días después (~23 días)
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Crear compra despachada recientemente
+        let compra = Compra {
+            id: id_compra,
+            timestamp: timestamp_despacho,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+        contrato.compras.insert(id_compra, compra);
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo));
+    }
+    #[ink::test]
+    fn reclamar_fondos_no_es_vendedor() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+        let vendedor = AccountId::from([0x02; 32]);
+        let otro_usuario = AccountId::from([0x03; 32]); // no es vendedor
+        let comprador = AccountId::from([0x01; 32]);
+        let id_compra = 0;
+        let timestamp_despacho = 0;
+        let timestamp_actual = 6_000_000_000; // más de 60 días
+
+        // Registrar usuarios
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(otro_usuario, Rol::Vendedor(Default::default())).unwrap();
+
+        // Crear compra despachada hace más de 60 días
+        let compra = Compra {
+            id: id_compra,
+            timestamp: timestamp_despacho,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+        contrato.compras.insert(id_compra, compra);
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, otro_usuario, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::NoEsElVendedor));
+    }
+    #[ink::test]
+    fn reclamar_fondos_fondos_ya_transferidos() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+        let vendedor = AccountId::from([0x02; 32]);
+        let comprador = AccountId::from([0x01; 32]);
+        let id_compra = 0;
+        let timestamp_despacho = 0;
+        let timestamp_actual = 6_000_000_000; // más de 60 días
+
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Compra ya con fondos transferidos
+        let compra = Compra {
+            id: id_compra,
+            timestamp: timestamp_despacho,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: true,
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+        contrato.compras.insert(id_compra, compra);
+
+        // Act
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Err(ErrorReclamarFondos::FondosYaTransferidos));
+    }
+    #[ink::test]
+    fn reclamar_fondos_no_convalida_politica() {
+        let mut contrato = RustaceoLibre::new();
+        let vendedor = AccountId::from([0x02; 32]);
+        let comprador = AccountId::from([0x01; 32]);
+        let id_compra = 0;
+        let timestamp_despacho = 0;
+        // timestamp_actual menor a 60 días (en nanos)
+        let timestamp_actual = 2_000_000_000; // ~23 días, menos de 60 días
+
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        contrato.compras.insert(id_compra, Compra {
+            id: id_compra,
+            timestamp: timestamp_despacho,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Despachado(timestamp_despacho),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+        assert_eq!(resultado, Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo));
+    }
+    #[ink::test]
+    fn compra_despachada_exitoso() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+
+        // Crear cuentas
+        let vendedor = AccountId::from([0x01; 32]);
+        let comprador = AccountId::from([0x02; 32]);
+
+        // Registrar cuentas
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Crear compra
+        let id_compra = 123;
+        let timestamp_pendiente = 1_000_000;
+
+        let compra = Compra {
+            id: id_compra,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 500,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Pendiente(timestamp_pendiente),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+
+        // Insertar la compra al contrato
+        contrato.compras.insert(id_compra, compra);
+
+        // Agregar la compra a la lista de ventas del vendedor
+        {
+            let mut usuario_vendedor = contrato.usuarios.get(vendedor).unwrap();
+            assert!(usuario_vendedor.agregar_venta(id_compra));
+            contrato.usuarios.insert(vendedor, &usuario_vendedor);
+        }
+
+        // Agregar la compra a la lista de compras del comprador (opcional, por coherencia)
+        {
+            let mut usuario_comprador = contrato.usuarios.get(comprador).unwrap();
+            assert!(usuario_comprador.agregar_compra(id_compra));
+            contrato.usuarios.insert(comprador, &usuario_comprador);
+        }
+
+        // Nuevo timestamp para marcar como despachado
+        let timestamp_despacho = timestamp_pendiente + 100;
+
+        // Act
+        let resultado = contrato._compra_despachada(timestamp_despacho, vendedor, id_compra);
+
+        // Assert
+        assert_eq!(resultado, Ok(()));
+        let actualizada = contrato.compras.get(&id_compra).unwrap();
+        assert!(matches!(actualizada.estado, EstadoCompra::Despachado(ts) if ts == timestamp_despacho));
+
+    }
+
 }
+
