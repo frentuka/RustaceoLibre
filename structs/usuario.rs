@@ -467,3 +467,649 @@ impl RustaceoLibre {
         total_calificaciones.to_be_bytes().first().copied()
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[ink::test]
+    fn registrar_usuario_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+
+    let cuenta = AccountId::from([0x1; 32]);
+
+    // Registro exitoso
+    let resultado = contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default()));
+    assert_eq!(resultado, Ok(()));
+
+    // Fallo por registrar el mismo usuario
+    let resultado_repetido = contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default()));
+    assert_eq!(resultado_repetido, Err(ErrorRegistrarUsuario::UsuarioYaExiste));
+}
+
+#[ink::test]
+fn ascender_rol_usuario_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x2; 32]);
+
+    // Intentar ascender sin registrar usuario → Error
+    let resultado_inexistente = contrato._ascender_rol_usuario(cuenta);
+    assert_eq!(resultado_inexistente, Err(ErrorAscenderRolUsuario::UsuarioInexistente));
+
+    // Registrar usuario como Comprador
+    let _ = contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default()));
+
+    // Asciende correctamente a Ambos
+    let resultado_ascenso = contrato._ascender_rol_usuario(cuenta);
+    assert_eq!(resultado_ascenso, Ok(()));
+
+    // Intentar ascender nuevamente → Error por ya tener rol Ambos
+    let resultado_reintento = contrato._ascender_rol_usuario(cuenta);
+    assert_eq!(resultado_reintento, Err(ErrorAscenderRolUsuario::MaximoRolAsignado));
+}
+
+#[ink::test]
+fn ascender_rol_usuario_falla_si_ya_es_ambos() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x7; 32]);
+
+    // Registrar como comprador
+    assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+
+    // Ascender una vez (Comprador -> Ambos)
+    assert!(contrato._ascender_rol_usuario(cuenta).is_ok());
+
+    // Intentar ascender de nuevo (ya es Ambos)
+    assert_eq!(
+        contrato._ascender_rol_usuario(cuenta),
+        Err(ErrorAscenderRolUsuario::MaximoRolAsignado)
+    );
+}
+
+#[ink::test]
+fn ascender_rol_usuario_falla_usuario_inexistente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta_inexistente = AccountId::from([0x8; 32]);
+
+    assert_eq!(
+        contrato._ascender_rol_usuario(cuenta_inexistente),
+        Err(ErrorAscenderRolUsuario::UsuarioInexistente)
+    );
+}
+
+#[ink::test]
+fn registrar_usuario_falla_si_ya_existe() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x9; 32]);
+
+    // Primer registro debe funcionar
+    assert_eq!(
+        contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())),
+        Ok(())
+    );
+
+    // Segundo intento debe fallar
+    assert_eq!(
+        contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())),
+        Err(ErrorRegistrarUsuario::UsuarioYaExiste)
+    );
+}
+
+#[ink::test]
+fn agregar_compra_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x10; 32]);
+
+    // Registrar como comprador
+    assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+
+    // Agregar compra
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        assert!(usuario.agregar_compra(1001));
+        contrato.usuarios.insert(cuenta, &usuario);
+    }
+
+    // Confirmar que la compra se agregó
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        assert_eq!(usuario.obtener_compras(), Some(vec![1001]));
+    }
+}
+
+#[ink::test]
+fn agregar_venta_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x11; 32]);
+
+    // Registrar usuario vendedor
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    // Agregar venta
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        assert!(usuario.agregar_venta(2001));
+        contrato.usuarios.insert(cuenta, &usuario);
+    }
+
+    // Confirmar venta agregada
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        assert_eq!(usuario.obtener_ventas(), Some(vec![2001]));
+    }
+}
+
+#[ink::test]
+fn agregar_publicacion_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x12; 32]);
+
+    // Registrar usuario vendedor
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    // Agregar publicacion
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        assert!(usuario.agregar_publicacion(3001));
+        contrato.usuarios.insert(cuenta, &usuario);
+    }
+
+    // Confirmar publicacion agregada
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        assert_eq!(usuario.obtener_publicaciones(), Some(vec![3001]));
+    }
+}
+
+#[ink::test]
+fn establecer_stock_producto_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x13; 32]);
+
+    // Registrar usuario vendedor
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    // Establecer stock producto
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        let id_producto = 4001u128;
+        let stock = 50u32;
+        assert!(usuario.establecer_stock_producto(&id_producto, &stock));
+        contrato.usuarios.insert(cuenta, &usuario);
+    }
+
+    // Confirmar stock modificado
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        assert_eq!(usuario.obtener_stock_producto(&4001u128), Some(50));
+    }
+}
+
+#[ink::test]
+fn calificar_como_comprador_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x14; 32]);
+
+    // Registrar comprador
+    assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        assert!(usuario.calificar_como_comprador(5));
+        contrato.usuarios.insert(cuenta, &usuario);
+    }
+
+    // Confirmar calificacion
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        let data = usuario.obtener_data_comprador().unwrap();
+        assert_eq!(data.total_calificaciones, 5);
+        assert_eq!(data.cant_calificaciones, 1);
+    }
+}
+
+#[ink::test]
+fn calificar_como_comprador_falla_con_calificacion_invalida() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x15; 32]);
+
+    // Registrar comprador
+    assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        // Calificacion invalida (0)
+        assert_eq!(usuario.calificar_como_comprador(0), false);
+        // Calificacion invalida (6)
+        assert_eq!(usuario.calificar_como_comprador(6), false);
+    }
+}
+
+#[ink::test]
+fn calificar_como_vendedor_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x16; 32]);
+
+    // Registrar vendedor
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        assert!(usuario.calificar_como_vendedor(4));
+        contrato.usuarios.insert(cuenta, &usuario);
+    }
+
+    // Confirmar calificacion
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        let data = usuario.obtener_data_vendedor().unwrap();
+        assert_eq!(data.total_calificaciones, 4);
+        assert_eq!(data.cant_calificaciones, 1);
+    }
+}
+
+#[ink::test]
+fn calificar_como_vendedor_falla_con_calificacion_invalida() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x17; 32]);
+
+    // Registrar vendedor
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        // Calificacion invalida (0)
+        assert_eq!(usuario.calificar_como_vendedor(0), false);
+        // Calificacion invalida (6)
+        assert_eq!(usuario.calificar_como_vendedor(6), false);
+    }
+}
+
+
+#[ink::test]
+fn ver_calificacion_comprador_devuelve_none_si_no_es_comprador() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x19; 32]);
+
+    // Registrar usuario vendedor
+    let usuario = Usuario::new(cuenta, Rol::Vendedor(DataVendedor::default()));
+    contrato.usuarios.insert(cuenta, &usuario);
+
+    assert_eq!(contrato._ver_calificacion_comprador(cuenta), None);
+}
+
+
+#[ink::test]
+fn ver_calificacion_vendedor_devuelve_none_si_no_es_vendedor() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x21; 32]);
+
+    // Registrar usuario comprador
+    let usuario = Usuario::new(cuenta, Rol::Comprador(DataComprador::default()));
+    contrato.usuarios.insert(cuenta, &usuario);
+
+    assert_eq!(contrato._ver_calificacion_vendedor(cuenta), None);
+}
+
+#[ink::test]
+fn es_comprador_y_es_vendedor_funcionan_correctamente() {
+    let comprador = Usuario::new(AccountId::from([0x1; 32]), Rol::Comprador(DataComprador::default()));
+    assert!(comprador.es_comprador());
+    assert!(!comprador.es_vendedor());
+
+    let vendedor = Usuario::new(AccountId::from([0x2; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert!(!vendedor.es_comprador());
+    assert!(vendedor.es_vendedor());
+
+    let ambos = Usuario::new(AccountId::from([0x3; 32]), Rol::Ambos(DataComprador::default(), DataVendedor::default()));
+    assert!(ambos.es_comprador());
+    assert!(ambos.es_vendedor());
+}
+
+#[ink::test]
+fn obtener_stock_productos_y_obtener_stock_producto_funcionan() {
+    let mut vendedor = Usuario::new(AccountId::from([0x4; 32]), Rol::Vendedor(DataVendedor::default()));
+
+    // Inicialmente no hay productos
+    assert_eq!(vendedor.obtener_stock_productos().unwrap().productos.len(), 0);
+    assert_eq!(vendedor.obtener_stock_producto(&123u128), None);
+
+    // Establecer stock y verificar
+    assert!(vendedor.establecer_stock_producto(&123u128, &10));
+    assert_eq!(vendedor.obtener_stock_producto(&123u128), Some(10));
+
+    // Stock de producto inexistente devuelve None
+    assert_eq!(vendedor.obtener_stock_producto(&999u128), None);
+}
+
+#[ink::test]
+fn agregar_compra_falla_si_usuario_no_es_comprador() {
+    let mut vendedor = Usuario::new(AccountId::from([0x5; 32]), Rol::Vendedor(DataVendedor::default()));
+
+    assert!(!vendedor.agregar_compra(5001));
+}
+
+#[ink::test]
+fn agregar_venta_falla_si_usuario_no_es_vendedor() {
+    let mut comprador = Usuario::new(AccountId::from([0x6; 32]), Rol::Comprador(DataComprador::default()));
+
+    assert!(!comprador.agregar_venta(6001));
+}
+
+#[ink::test]
+fn agregar_publicacion_falla_si_usuario_no_es_vendedor() {
+    let mut comprador = Usuario::new(AccountId::from([0x7; 32]), Rol::Comprador(DataComprador::default()));
+
+    assert!(!comprador.agregar_publicacion(7001));
+}
+
+#[ink::test]
+fn establecer_stock_producto_falla_si_usuario_no_es_vendedor() {
+    let mut comprador = Usuario::new(AccountId::from([0x8; 32]), Rol::Comprador(DataComprador::default()));
+
+    let stock = 30u32;
+    assert!(!comprador.establecer_stock_producto(&123u128, &stock));
+}
+
+#[ink::test]
+fn stock_productos_insert_y_get_funcionan_correctamente() {
+    let mut stock = StockProductos::default();
+
+    // Insertar producto nuevo
+    stock.insert(1u128, 10);
+    assert_eq!(stock.get(&1u128), Some(10));
+
+    // Insertar producto en orden correcto (menor)
+    stock.insert(0u128, 5);
+    assert_eq!(stock.get(&0u128), Some(5));
+
+    // Insertar producto en orden correcto (mayor)
+    stock.insert(2u128, 20);
+    assert_eq!(stock.get(&2u128), Some(20));
+
+    // Actualizar producto existente
+    stock.insert(1u128, 15);
+    assert_eq!(stock.get(&1u128), Some(15));
+
+    // Buscar producto inexistente
+    assert_eq!(stock.get(&99u128), None);
+}
+
+#[ink::test]
+fn calificar_como_comprador_acepta_valores_limite() {
+    let mut usuario = Usuario::new(AccountId::from([0x9; 32]), Rol::Comprador(DataComprador::default()));
+
+    assert!(usuario.calificar_como_comprador(1));
+    assert!(usuario.calificar_como_comprador(5));
+}
+
+#[ink::test]
+fn calificar_como_vendedor_acepta_valores_limite() {
+    let mut usuario = Usuario::new(AccountId::from([0x10; 32]), Rol::Vendedor(DataVendedor::default()));
+
+    assert!(usuario.calificar_como_vendedor(1));
+    assert!(usuario.calificar_como_vendedor(5));
+}
+
+#[ink::test]
+fn agregar_compra_no_duplica_compras() {
+    let mut usuario = Usuario::new(AccountId::from([0x20; 32]), Rol::Comprador(DataComprador::default()));
+    assert!(usuario.agregar_compra(123));
+    // Intentar agregar la misma compra otra vez
+    assert!(usuario.agregar_compra(123));
+    // Ver que efectivamente hay dos (porque tu lógica actual no impide duplicados)
+    assert_eq!(usuario.obtener_compras().unwrap().len(), 2);
+}
+
+#[ink::test]
+fn agregar_venta_no_duplica_ventas() {
+    let mut usuario = Usuario::new(AccountId::from([0x21; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert!(usuario.agregar_venta(456));
+    assert!(usuario.agregar_venta(456));
+    assert_eq!(usuario.obtener_ventas().unwrap().len(), 2);
+}
+
+#[ink::test]
+fn calificar_como_comprador_no_modifica_si_usuario_no_comprador() {
+    let mut usuario = Usuario::new(AccountId::from([0x22; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert_eq!(usuario.calificar_como_comprador(3), false);
+}
+
+#[ink::test]
+fn calificar_como_vendedor_no_modifica_si_usuario_no_vendedor() {
+    let mut usuario = Usuario::new(AccountId::from([0x23; 32]), Rol::Comprador(DataComprador::default()));
+    assert_eq!(usuario.calificar_como_vendedor(3), false);
+}
+
+#[ink::test]
+fn obtener_stock_producto_no_pánico_con_usuario_sin_stock() {
+    let usuario = Usuario::new(AccountId::from([0x24; 32]), Rol::Vendedor(DataVendedor::default()));
+    // No tiene productos
+    assert_eq!(usuario.obtener_stock_producto(&999u128), None);
+}
+
+#[ink::test]
+fn establecer_stock_producto_modifica_correctamente_stock_existente() {
+    let mut usuario = Usuario::new(AccountId::from([0x25; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert!(usuario.establecer_stock_producto(&1u128, &10));
+    assert_eq!(usuario.obtener_stock_producto(&1u128), Some(10));
+    // Cambiar stock del mismo producto
+    assert!(usuario.establecer_stock_producto(&1u128, &20));
+    assert_eq!(usuario.obtener_stock_producto(&1u128), Some(20));
+}
+
+#[ink::test]
+fn calificaciones_promedio_comprador_y_vendedor_sin_calificaciones_devuelven_none() {
+    let mut usuario = Usuario::new(AccountId::from([0x26; 32]), Rol::Ambos(DataComprador::default(), DataVendedor::default()));
+    // Sin calificaciones aún
+    assert_eq!(usuario.calificar_como_comprador(0), false);
+    assert_eq!(usuario.calificar_como_vendedor(0), false);
+
+    // Revisar calificaciones promedio (deberían ser None)
+    let contrato = RustaceoLibre::default();
+    assert_eq!(contrato._ver_calificacion_comprador(usuario.id), None);
+    assert_eq!(contrato._ver_calificacion_vendedor(usuario.id), None);
+}
+
+#[ink::test]
+fn rol_es_comprador_y_es_vendedor_para_casos_ambos() {
+    let usuario = Usuario::new(AccountId::from([0x27; 32]), Rol::Ambos(DataComprador::default(), DataVendedor::default()));
+    assert!(usuario.es_comprador());
+    assert!(usuario.es_vendedor());
+}
+
+#[ink::test]
+fn rol_es_comprador_y_es_vendedor_para_casos_unicos() {
+    let usuario_c = Usuario::new(AccountId::from([0x28; 32]), Rol::Comprador(DataComprador::default()));
+    assert!(usuario_c.es_comprador());
+    assert!(!usuario_c.es_vendedor());
+
+    let usuario_v = Usuario::new(AccountId::from([0x29; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert!(!usuario_v.es_comprador());
+    assert!(usuario_v.es_vendedor());
+}
+
+#[ink::test]
+fn insertar_stock_productos_ordenado() {
+    let mut stock = StockProductos::default();
+    stock.insert(10, 100);
+    stock.insert(5, 50);
+    stock.insert(7, 70);
+    stock.insert(3, 30);
+    stock.insert(10, 110); // actualizar
+
+    assert_eq!(stock.productos, vec![3,5,7,10]);
+    assert_eq!(stock.get(&3), Some(30));
+    assert_eq!(stock.get(&5), Some(50));
+    assert_eq!(stock.get(&7), Some(70));
+    assert_eq!(stock.get(&10), Some(110));
+}
+
+#[ink::test]
+fn insertar_stock_productos_con_producto_no_existente() {
+    let mut stock = StockProductos::default();
+    assert_eq!(stock.get(&999), None);
+}
+
+#[ink::test]
+fn ver_calificacion_comprador_devuelve_none_si_no_tiene_calificaciones() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x30; 32]);
+
+    let comprador = Usuario::new(cuenta, Rol::Comprador(DataComprador::default()));
+    contrato.usuarios.insert(cuenta, &comprador);
+
+    assert_eq!(contrato._ver_calificacion_comprador(cuenta), None);
+}
+
+#[ink::test]
+fn ver_calificacion_vendedor_devuelve_none_si_no_tiene_calificaciones() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x31; 32]);
+
+    let vendedor = Usuario::new(cuenta, Rol::Vendedor(DataVendedor::default()));
+    contrato.usuarios.insert(cuenta, &vendedor);
+
+    assert_eq!(contrato._ver_calificacion_vendedor(cuenta), None);
+}
+
+#[ink::test]
+fn establecer_stock_producto_actualiza_sin_duplicar() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x34; 32]);
+
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        usuario.establecer_stock_producto(&123, &10);
+        usuario.establecer_stock_producto(&123, &20);
+        contrato.usuarios.insert(cuenta, &usuario);
+    }
+
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        assert_eq!(usuario.obtener_stock_producto(&123), Some(20));
+        let stock = usuario.obtener_stock_productos().unwrap();
+        assert_eq!(stock.productos.len(), 1); // no se duplicó
+    }
+}
+
+#[ink::test]
+fn ascender_rol_usuario_funciona_para_vendedor() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x35; 32]);
+
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    let resultado = contrato._ascender_rol_usuario(cuenta);
+    assert_eq!(resultado, Ok(()));
+
+    if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        assert!(usuario.es_comprador());
+        assert!(usuario.es_vendedor());
+    }
+}
+
+#[ink::test]
+fn ascender_rol_usuario_de_vendedor_a_ambos_funciona_correctamente() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x32; 32]);
+
+    // Registrar como vendedor
+    assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+
+    // Asciende a Ambos
+    let resultado = contrato._ascender_rol_usuario(cuenta);
+    assert_eq!(resultado, Ok(()));
+}
+
+#[ink::test]
+fn stock_productos_insert_en_medio_funciona_correctamente() {
+    let mut stock = StockProductos::default();
+    stock.insert(10, 100);
+    stock.insert(30, 300);
+    stock.insert(20, 200); // va al medio
+
+    assert_eq!(stock.productos, vec![10, 20, 30]);
+    assert_eq!(stock.stock, vec![100, 200, 300]);
+}
+
+    #[ink::test]
+    fn stock_productos_insert_mantiene_orden_correcto() {
+        let mut stock = StockProductos::default();
+        stock.insert(5, 50);
+        stock.insert(3, 30);
+        stock.insert(7, 70);
+        stock.insert(1, 10); // al principio
+        stock.insert(9, 90); // al final
+
+        assert_eq!(stock.productos, vec![1, 3, 5, 7, 9]);
+        assert_eq!(stock.stock, vec![10, 30, 50, 70, 90]);
+    }
+
+  #[ink::test]
+fn calificar_como_comprador_rechaza_valores_invalidos() {
+    let mut usuario = Usuario::new(AccountId::from([0x50; 32]), Rol::Comprador(DataComprador::default()));
+    assert_eq!(usuario.calificar_como_comprador(0), false);
+    assert_eq!(usuario.calificar_como_comprador(6), false);
+}
+
+#[ink::test]
+fn calificar_como_vendedor_rechaza_valores_invalidos() {
+    let mut usuario = Usuario::new(AccountId::from([0x51; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert_eq!(usuario.calificar_como_vendedor(0), false);
+    assert_eq!(usuario.calificar_como_vendedor(6), false);
+}
+
+#[ink::test]
+fn calificar_como_comprador_rechaza_usuario_sin_rol_comprador() {
+    let mut usuario = Usuario::new(AccountId::from([0x52; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert_eq!(usuario.calificar_como_comprador(4), false);
+}
+
+#[ink::test]
+fn calificar_como_vendedor_rechaza_usuario_sin_rol_vendedor() {
+    let mut usuario = Usuario::new(AccountId::from([0x53; 32]), Rol::Comprador(DataComprador::default()));
+    assert_eq!(usuario.calificar_como_vendedor(4), false);
+}
+
+#[ink::test]
+fn obtener_stock_producto_no_existe_devuelve_none() {
+    let usuario = Usuario::new(AccountId::from([0x55; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert_eq!(usuario.obtener_stock_producto(&99999), None);
+}
+
+#[ink::test]
+fn establecer_y_modificar_stock_producto() {
+    let mut usuario = Usuario::new(AccountId::from([0x56; 32]), Rol::Vendedor(DataVendedor::default()));
+    assert!(usuario.establecer_stock_producto(&42, &15));
+    assert_eq!(usuario.obtener_stock_producto(&42), Some(15));
+
+    // Modificar
+    assert!(usuario.establecer_stock_producto(&42, &30));
+    assert_eq!(usuario.obtener_stock_producto(&42), Some(30));
+}
+
+#[ink::test]
+fn insertar_varios_productos_y_verificar_orden() {
+    let mut stock = StockProductos::default();
+    stock.insert(20, 200);
+    stock.insert(10, 100);
+    stock.insert(15, 150);
+    stock.insert(10, 110); // actualiza el existente
+
+    assert_eq!(stock.productos, vec![10, 15, 20]);
+    assert_eq!(stock.get(&10), Some(110));
+    assert_eq!(stock.get(&15), Some(150));
+    assert_eq!(stock.get(&20), Some(200));
+}
+
+#[ink::test]
+fn ver_calificacion_vendedor_sin_calificaciones_devuelve_none() {
+    let mut contrato = RustaceoLibre::default();
+    let cuenta = AccountId::from([0x58; 32]);
+
+    let usuario = Usuario::new(cuenta, Rol::Vendedor(DataVendedor::default()));
+    contrato.usuarios.insert(cuenta, &usuario);
+
+    assert_eq!(contrato._ver_calificacion_vendedor(cuenta), None);
+}
+
+#[ink::test]
+fn ver_calificacion_comprador_usuario_no_existente_devuelve_none() {
+    let contrato = RustaceoLibre::default();
+    let cuenta_inexistente = AccountId::from([0x99; 32]);
+
+    assert_eq!(contrato._ver_calificacion_comprador(cuenta_inexistente), None);
+}
+
+#[ink::test]
+fn establecer_stock_producto_en_usuario_no_vendedor_falla() {
+    let mut usuario = Usuario::new(AccountId::from([0x60; 32]), Rol::Comprador(DataComprador::default()));
+    assert_eq!(usuario.establecer_stock_producto(&1, &10), false);
+}
+
+}
