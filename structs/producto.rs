@@ -250,7 +250,7 @@ impl RustaceoLibre {
 mod tests {
 
         use super::*;
-        use crate::structs::usuario::Rol;
+        use crate::structs::usuario::{Rol, RolDeSeleccion};
         use crate::structs::producto::{CategoriaProducto, Producto};
     
     //
@@ -269,7 +269,7 @@ mod tests {
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
 
         // Registrar a Alice como Vendedor
-        let rol = Rol::Vendedor(Default::default());
+        let rol = RolDeSeleccion::Vendedor;
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
         // Registrar producto
@@ -319,7 +319,7 @@ mod tests {
         let caller = AccountId::from([0x2; 32]);
 
         // registrar usuario como comprador
-        let rol = Rol::Comprador(Default::default());
+        let rol = RolDeSeleccion::Comprador;
         contrato._registrar_usuario(caller, rol).expect("Debe registrarse");
 
         let nombre = "Mate".into();
@@ -346,7 +346,7 @@ mod tests {
 
         // Registrar a Alice como Vendedor
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
-        let rol = Rol::Vendedor(Default::default());
+        let rol = RolDeSeleccion::Vendedor;
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
         // Usar un id_producto que NO existe en el mapa de productos
@@ -383,7 +383,7 @@ mod tests {
 
         let mut contrato = RustaceoLibre::new();
 
-        let rol = Rol::Comprador(Default::default());
+        let rol = RolDeSeleccion::Comprador;
         assert_eq!(contrato._registrar_usuario(comprador, rol), Ok(()));
 
         let producto = Producto {
@@ -549,7 +549,7 @@ mod tests {
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
 
         // Registrar a Alice como Vendedor
-        let rol = Rol::Vendedor(Default::default());
+        let rol = RolDeSeleccion::Vendedor;
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
 

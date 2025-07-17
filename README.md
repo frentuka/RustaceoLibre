@@ -6,7 +6,9 @@
 
 Rustaceo Libre es un marketplace «al estilo Mercado Libre» desarrollado en Ink!
 
-Esta es descripción de la estructura del sistema, implementando todo lo solicitado por la cátedra y agregando o reimaginando algunas funcionalidades
+Despliegue del contrato: YpoaBdrWJN6gqR25GHdw3GgfsB1orgk7C1jrNg77yzUG2vN
+
+Esta es una descripción de la estructura del sistema, implementando todo lo solicitado por el enunciado y agregando o reimaginando algunas funcionalidades
 
 ## Usuario
 

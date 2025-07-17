@@ -730,8 +730,8 @@ impl RustaceoLibre {
 mod tests {
     use super::*;
     use crate::structs::{
-        producto::{CategoriaProducto},
-        usuario::{Rol},
+        producto::CategoriaProducto,
+        usuario::{Rol, RolDeSeleccion},
     };
     use ink::primitives::AccountId;
 
@@ -744,8 +744,8 @@ mod tests {
         let vendedor = AccountId::from([0x2; 32]);
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Registrar producto
         let nombre = "Termo".into();
@@ -783,7 +783,7 @@ mod tests {
         let mut contrato = RustaceoLibre::default();
 
         let comprador = AccountId::from([0x1; 32]);
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Simular compra con cantidad = 0
         let resultado = contrato._comprar_producto(0, comprador, 999, 0, 100);
@@ -812,7 +812,7 @@ mod tests {
         let vendedor = AccountId::from([0x1; 32]);
 
         // Registrar al usuario como VENDEDOR, no como comprador
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Crear producto y publicarlo
         let nombre = "Cuadro".into();
@@ -838,7 +838,7 @@ mod tests {
         let comprador = AccountId::from([0x1; 32]);
 
         // Registrar al usuario como Comprador
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Intentar comprar con una publicación que no existe
         let id_publicacion_invalido = 999;
@@ -856,8 +856,8 @@ mod tests {
         let comprador = AccountId::from([0x2; 32]);
 
         // Registrar ambos usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Registrar producto y publicación
         let id_producto = contrato._registrar_producto(
@@ -888,8 +888,8 @@ mod tests {
         let comprador = AccountId::from([0x2; 32]);
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Registrar producto y publicación con 5 unidades
         let id_producto = contrato._registrar_producto(
@@ -917,8 +917,8 @@ mod tests {
         let comprador = AccountId::from([0x2; 32]);
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Registrar producto y publicación
         let id_producto = contrato._registrar_producto(
@@ -946,8 +946,8 @@ mod tests {
         let comprador = AccountId::from([0x2; 32]);
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Registrar producto y publicación con precio máximo
         let id_producto = contrato._registrar_producto(
@@ -982,8 +982,8 @@ mod tests {
         let timestamp_actual = timestamp_despacho + 5_184_000_000; // 60 días
 
         // Registrar vendedor y comprador
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Crear compra
         let compra = Pedido {
@@ -1029,7 +1029,7 @@ mod tests {
         let timestamp_actual = timestamp_despacho + 5_184_000_000;
 
         // Registrar solo al comprador y no al vendedor
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Insertar la compra directamente
         contrato.pedidos.insert(id_compra, Pedido {
@@ -1064,7 +1064,7 @@ mod tests {
         let id_compra_inexistente = 999;
 
         // Registrar al vendedor
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // No se inserta ninguna compra
 
@@ -1088,8 +1088,8 @@ mod tests {
         let timestamp_actual = 6_184_000_000; // más de 60 días
 
         // Registrar ambos usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor_real, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor_real, RolDeSeleccion::Vendedor).unwrap();
 
         // Crear compra despachada, pero el caller no es el vendedor
         let compra = Pedido {
@@ -1127,8 +1127,8 @@ mod tests {
         let timestamp_actual = 6_184_000_000; // más de 60 días
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Crear compra con fondos ya transferidos
         let compra = Pedido {
@@ -1167,8 +1167,8 @@ mod tests {
         let timestamp_actual = 6_184_000_000; // > 60 días
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Crear compra en estado incorrecto (Pendiente)
         let compra = Pedido {
@@ -1206,8 +1206,8 @@ mod tests {
         let timestamp_actual = 2_000_000_000; // menos de 60 días después (~23 días)
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Crear compra despachada recientemente
         let compra = Pedido {
@@ -1246,9 +1246,9 @@ mod tests {
         let timestamp_actual = 6_000_000_000; // más de 60 días
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(otro_usuario, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(otro_usuario, RolDeSeleccion::Vendedor).unwrap();
 
         // Crear compra despachada hace más de 60 días
         let compra = Pedido {
@@ -1285,8 +1285,8 @@ mod tests {
         let timestamp_despacho = 0;
         let timestamp_actual = 6_000_000_000; // más de 60 días
 
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Compra ya con fondos transferidos
         let compra = Pedido {
@@ -1323,8 +1323,8 @@ mod tests {
         // timestamp_actual menor a 60 días (en nanos)
         let timestamp_actual = 2_000_000_000; // ~23 días, menos de 60 días
 
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         contrato.pedidos.insert(id_compra, Pedido {
             id: id_compra,
@@ -1356,8 +1356,8 @@ mod tests {
         let comprador = AccountId::from([0x02; 32]);
 
         // Registrar cuentas
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Crear compra
         let id_compra = 123;
@@ -1415,7 +1415,7 @@ mod tests {
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
 
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
         // vendedor NO registrado
 
         let id_compra = 0;
@@ -1444,7 +1444,7 @@ mod tests {
         let mut contrato = RustaceoLibre::new();
 
         let vendedor = AccountId::from([0x01; 32]);
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         let id_compra_invalido = 999;
         let resultado = contrato._pedido_despachado(123456, vendedor, id_compra_invalido);
@@ -1461,8 +1461,8 @@ mod tests {
         let comprador = AccountId::from([0x02; 32]);
 
         // Registrar cuentas
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Crear compra
         let id_compra = 123;
@@ -1525,8 +1525,8 @@ mod tests {
         let comprador = AccountId::from([0x02; 32]);
 
         // Registrar cuentas
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Crear compra
         let id_compra = 123;
@@ -1587,8 +1587,8 @@ mod tests {
         let timestamp_recibido = 1_000_000_000;
         let timestamp_actual = 2_000_000_000;
 
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         contrato.pedidos.insert(id_compra, Pedido {
             id: id_compra,
@@ -1619,8 +1619,8 @@ mod tests {
         let timestamp_cancelado = 1_000_000_000;
         let timestamp_actual = 2_000_000_000;
 
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         contrato.pedidos.insert(id_compra, Pedido {
             id: id_compra,
@@ -1651,8 +1651,8 @@ mod tests {
         let timestamp_recibido = 1_000_000_000;
         let timestamp_actual = 2_000_000_000;
 
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         contrato.pedidos.insert(id_compra, Pedido {
             id: id_compra,
@@ -1696,8 +1696,8 @@ mod tests {
         let timestamp_recibido = 1000;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra ya recibida
         contrato.pedidos.insert(id_compra, Pedido {
@@ -1736,8 +1736,8 @@ mod tests {
         let timestamp_cancelado = 1234;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra cancelada
         contrato.pedidos.insert(id_compra, Pedido {
@@ -1776,8 +1776,8 @@ mod tests {
         let timestamp_pendiente = 1111;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra pendiente
         contrato.pedidos.insert(id_compra, Pedido {
@@ -1816,8 +1816,8 @@ mod tests {
         let timestamp_despachado = 2222;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra despachada
         contrato.pedidos.insert(id_compra, Pedido {
@@ -1868,7 +1868,7 @@ mod tests {
         let id_compra = 999;
 
         // Registrar usuario
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // No agregar la compra a la lista de compras del usuario
 
@@ -1886,9 +1886,9 @@ mod tests {
         let id_compra = 123;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(otro_usuario, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(otro_usuario, RolDeSeleccion::Comprador).unwrap();
 
         // Insertar compra pendiente
         contrato.pedidos.insert(id_compra, Pedido {
@@ -1940,8 +1940,8 @@ mod tests {
         let timestamp_recibido = 8888;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra ya recibida
         contrato.pedidos.insert(id_compra, Pedido {
@@ -1987,8 +1987,8 @@ mod tests {
         let timestamp_cancelado = 9999;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra ya cancelada
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2040,7 +2040,7 @@ mod tests {
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como vendedor (no comprador)
-        contrato._registrar_usuario(usuario, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(usuario, RolDeSeleccion::Vendedor).unwrap();
 
         let resultado = contrato._ver_compras(usuario);
         assert_eq!(resultado, Err(ErrorVerCompras::NoEsComprador));
@@ -2053,7 +2053,7 @@ mod tests {
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como comprador
-        contrato._registrar_usuario(usuario, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(usuario, RolDeSeleccion::Comprador).unwrap();
 
         // No agregar compras
 
@@ -2070,8 +2070,8 @@ mod tests {
         let id_compra = 123;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2120,7 +2120,7 @@ mod tests {
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como comprador (no vendedor)
-        contrato._registrar_usuario(usuario, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(usuario, RolDeSeleccion::Comprador).unwrap();
 
         let resultado = contrato._ver_ventas(usuario);
         assert_eq!(resultado, Err(ErrorVerVentas::NoEsVendedor));
@@ -2133,7 +2133,7 @@ mod tests {
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como vendedor
-        contrato._registrar_usuario(usuario, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(usuario, RolDeSeleccion::Vendedor).unwrap();
 
         // No agregar ventas
 
@@ -2150,8 +2150,8 @@ mod tests {
         let id_compra = 456;
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Insertar compra
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2192,8 +2192,8 @@ mod tests {
         let id_compra = 1;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra en estado Pendiente
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2234,8 +2234,8 @@ mod tests {
         let id_compra = 1;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra en estado Pendiente
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2277,8 +2277,8 @@ mod tests {
         let id_compra = 1;
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Insertar compra en estado Pendiente
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2320,8 +2320,8 @@ mod tests {
         let id_compra = 1;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Registrar producto y publicación en categoría Hogar
         let id_producto = contrato._registrar_producto(
@@ -2372,8 +2372,8 @@ mod tests {
         let id_compra = 2;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Registrar producto y publicación en categoría Tecnología
         let id_producto = contrato._registrar_producto(
@@ -2425,8 +2425,8 @@ mod tests {
         let id_compra = 3;
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Registrar producto y publicación en categoría Hogar
         let id_producto = contrato._registrar_producto(
@@ -2478,8 +2478,8 @@ mod tests {
         let id_compra = 4;
 
         // Registrar usuarios
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Registrar producto y publicación en categoría Hogar
         let id_producto = contrato._registrar_producto(
@@ -2529,7 +2529,7 @@ mod tests {
         let id_compra = 1;
 
         // Registrar usuario
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Intentar calificar con valor fuera de rango
         let resultado = contrato._calificar_pedido(comprador, id_compra, 0); // fuera de rango
@@ -2560,7 +2560,7 @@ mod tests {
         let id_compra = 999;
 
         // Registrar usuario
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // No insertar compra
 
@@ -2577,8 +2577,8 @@ mod tests {
         let id_compra = 10;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, crate::structs::usuario::Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra en estado Pendiente
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2609,8 +2609,8 @@ mod tests {
         let id_compra = 20;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, crate::structs::usuario::Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra recibida y ya calificada por el comprador
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2642,9 +2642,9 @@ mod tests {
         let id_compra = 30;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, crate::structs::usuario::Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(otro_usuario, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(otro_usuario, RolDeSeleccion::Comprador).unwrap();
 
         // Insertar compra recibida
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2676,7 +2676,7 @@ mod tests {
         let id_compra = 40;
 
         // Registrar solo al comprador
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
         // NO registrar al vendedor
 
         // Insertar compra recibida
@@ -2709,7 +2709,7 @@ mod tests {
         let id_compra = 41;
 
         // Registrar solo al vendedor
-        contrato._registrar_usuario(vendedor, crate::structs::usuario::Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
         // NO registrar al comprador
 
         // Insertar compra recibida
@@ -2742,8 +2742,8 @@ mod tests {
         let id_compra = 50;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, crate::structs::usuario::Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra recibida
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2778,8 +2778,8 @@ mod tests {
         let id_compra = 51;
 
         // Registrar usuarios
-        contrato._registrar_usuario(comprador, crate::structs::usuario::Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, crate::structs::usuario::Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         // Insertar compra recibida
         contrato.pedidos.insert(id_compra, Pedido {
@@ -2813,8 +2813,8 @@ mod tests {
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 60;
 
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
 
         contrato.pedidos.insert(id_compra, Pedido {
             id: id_compra,
@@ -2843,8 +2843,8 @@ mod tests {
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 999;
 
-        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         let timestamp_despacho = 1000;
         let timestamp_llamado = 500; // menor que el de despacho → causará None en `checked_sub`
@@ -2874,7 +2874,7 @@ mod tests {
         let mut contrato = RustaceoLibre::new();
         let comprador = AccountId::from([0x01; 32]);
 
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // No agregar compras
 
@@ -2889,7 +2889,7 @@ mod tests {
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 1;
 
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         // Usuario con otra compra
         {
@@ -2925,7 +2925,7 @@ mod tests {
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 1;
 
-        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         {
             let mut usuario = contrato.usuarios.get(comprador).unwrap();
