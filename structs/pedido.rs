@@ -539,30 +539,22 @@ impl RustaceoLibre {
     /// 
     /// Devuelve error si el usuario o pedido no existen, si el usuario no participa en el pedido,
     /// si el pedido ya fue cancelado o recibido y si quien solicita la cancelación ya la solicitó antes.
-    pub fn _cancelar_pedido(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<Option<(AccountId, u128)>, ErrorCancelarPedido> {
+    pub fn _cancelar_pedido(&mut self, timestamp: u64, caller: AccountId, id_pedido: u128) -> Result<Option<(AccountId, u128)>, ErrorCancelarPedido> {
         // validar usuario
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorCancelarPedido::UsuarioNoRegistrado); };
 
-        // validar compra #0
-        let Some(compras) = usuario.obtener_compras()
-        else { return Err(ErrorCancelarPedido::PedidoInexistente); };
-
-        // validar compra #1
-        let Some(compra) = compras.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
-        else { return Err(ErrorCancelarPedido::PedidoInexistente); };
-
         // validar compra #2
-        let Some(compra) = self.pedidos.get(&compra)
+        let Some(pedido) = self.pedidos.get(&id_pedido)
         else { return Err(ErrorCancelarPedido::PedidoInexistente); };
 
         // validar comprador
-        if compra.comprador != caller && compra.vendedor != caller {
+        if pedido.comprador != caller && pedido.vendedor != caller {
             return Err(ErrorCancelarPedido::UsuarioNoParticipa);
         }
 
         // validar estado
-        match compra.estado {
+        match pedido.estado {
             EstadoPedido::Pendiente(_) | EstadoPedido::Despachado(_) => (),
             EstadoPedido::Recibido(_) => return Err(ErrorCancelarPedido::PedidoYaRecibido),
             EstadoPedido::Cancelado(_) => return Err(ErrorCancelarPedido::PedidoYaCancelado),
@@ -572,11 +564,11 @@ impl RustaceoLibre {
         // validar si ya existe una solicitud de cancelación
         //
 
-        let mut compra= compra.clone();
-        let Some(primer_solicitud_cancelacion) = compra.primer_solicitud_cancelacion 
+        let mut pedido = pedido.clone();
+        let Some(primer_solicitud_cancelacion) = pedido.primer_solicitud_cancelacion 
         else {
-            compra.primer_solicitud_cancelacion = Some(caller);
-            self.pedidos.insert(compra.id, compra);
+            pedido.primer_solicitud_cancelacion = Some(caller);
+            self.pedidos.insert(pedido.id, pedido);
             return Ok(None);
         };
 
@@ -588,25 +580,25 @@ impl RustaceoLibre {
             return Err(ErrorCancelarPedido::EsperandoConfirmacionMutua);
         }
 
-        let id_comprador = compra.comprador;
-        let valor_compra = compra.valor_total;
+        let id_comprador = pedido.comprador;
+        let valor_pedido = pedido.valor_total;
 
         // modificar publicación: devolver stock
-        if let Some(mut publicacion) = self.publicaciones.get(&compra.publicacion).cloned() {
-            if let Some(nueva_cantidad_ofertada) = publicacion.cantidad_ofertada.checked_add(compra.cantidad_comprada) {
+        if let Some(mut publicacion) = self.publicaciones.get(&pedido.publicacion).cloned() {
+            if let Some(nueva_cantidad_ofertada) = publicacion.cantidad_ofertada.checked_add(pedido.cantidad_comprada) {
                 // modificar e insertar publicación con nueva cantidad ofertada
                 publicacion.cantidad_ofertada = nueva_cantidad_ofertada;
-                self.publicaciones.insert(compra.publicacion, publicacion);
+                self.publicaciones.insert(pedido.publicacion, publicacion);
             }
         } // si la publicacion no existe, el stock se pierde. para evitarlo debo agregar "id_producto" a compra
 
         // modificar compra
-        compra.estado = EstadoPedido::Cancelado(timestamp);
-        compra.fondos_fueron_transferidos = true;
-        self.pedidos.insert(compra.id, compra);
+        pedido.estado = EstadoPedido::Cancelado(timestamp);
+        pedido.fondos_fueron_transferidos = true;
+        self.pedidos.insert(pedido.id, pedido);
 
         // fin. se devolverán fondos en lib.rs
-        Ok(Some((id_comprador, valor_compra)))
+        Ok(Some((id_comprador, valor_pedido)))
     }
 
     //
@@ -1459,6 +1451,132 @@ mod tests {
         assert_eq!(resultado, Err(ErrorProductoDespachado::TransaccionInexistente));
     }
 
+    #[ink::test]
+    fn compra_recibida_exitoso() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+
+        // Crear cuentas
+        let vendedor = AccountId::from([0x01; 32]);
+        let comprador = AccountId::from([0x02; 32]);
+
+        // Registrar cuentas
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Crear compra
+        let id_compra = 123;
+        let timestamp_pendiente = 1_000_000;
+
+        let compra = Pedido {
+            id: id_compra,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 500,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Despachado(timestamp_pendiente),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+
+        // Insertar la compra al contrato
+        contrato.pedidos.insert(id_compra, compra.clone());
+
+        {
+            let mut usuario_vendedor = contrato.usuarios.get(vendedor).unwrap();
+            assert!(usuario_vendedor.agregar_venta(id_compra));
+            contrato.usuarios.insert(vendedor, &usuario_vendedor);
+        }
+
+        {
+            let mut usuario_comprador = contrato.usuarios.get(comprador).unwrap();
+            assert!(usuario_comprador.agregar_compra(id_compra));
+            contrato.usuarios.insert(comprador, &usuario_comprador);
+        }
+
+        // Nuevo timestamp para marcar como despachado
+        let timestamp_recibido = timestamp_pendiente + 100;
+
+        // Act
+        let resultado = contrato._pedido_recibido(timestamp_recibido, comprador, id_compra);
+
+        // Assert
+        let Ok((id_vendedor, monto_compra)) = resultado
+        else { panic!("Debería ser Ok"); };
+
+        assert_eq!(id_vendedor, vendedor);
+        assert_eq!(monto_compra, compra.valor_total);
+
+        let actualizada = contrato.pedidos.get(&id_compra).unwrap();
+        assert!(matches!(actualizada.estado, EstadoPedido::Recibido(_)));
+    }
+
+    #[ink::test]
+    fn cancelar_compra_exitoso() {
+        // Arrange
+        let mut contrato = RustaceoLibre::new();
+
+        // Crear cuentas
+        let vendedor = AccountId::from([0x01; 32]);
+        let comprador = AccountId::from([0x02; 32]);
+
+        // Registrar cuentas
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+        // Crear compra
+        let id_compra = 123;
+        let timestamp = 1_000_000;
+
+        let compra = Pedido {
+            id: id_compra,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 500,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Despachado(timestamp),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        };
+
+        // Insertar la compra al contrato
+        contrato.pedidos.insert(id_compra, compra.clone());
+
+        {
+            let mut usuario_vendedor = contrato.usuarios.get(vendedor).unwrap();
+            assert!(usuario_vendedor.agregar_venta(id_compra));
+            contrato.usuarios.insert(vendedor, &usuario_vendedor);
+        }
+
+        {
+            let mut usuario_comprador = contrato.usuarios.get(comprador).unwrap();
+            assert!(usuario_comprador.agregar_compra(id_compra));
+            contrato.usuarios.insert(comprador, &usuario_comprador);
+        }
+
+        // cancelar compra por parte del comprador
+        let res = contrato._cancelar_pedido(timestamp, comprador, id_compra);
+        let Ok(res) = res else { panic!("Debería ser Ok"); };
+        assert_eq!(res, None);
+
+        // cancelar compra por parte del comprador
+        let res = contrato._cancelar_pedido(timestamp, vendedor, id_compra);
+        let Ok(res) = res else { panic!("Debería ser Ok"); };
+        assert_eq!(res, Some((comprador, compra.valor_total)));
+
+        let Some(pedido) = contrato.pedidos.get(&id_compra)
+        else { panic!("Debería ser Some") };
+
+        assert!(matches!(pedido.estado, EstadoPedido::Cancelado(_)));
+    }
 
     #[ink::test]
     fn reclamar_fondos_estado_recibido() {

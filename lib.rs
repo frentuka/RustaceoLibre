@@ -202,10 +202,10 @@ mod rustaceo_libre {
         #[ink(message)]
         pub fn ver_stock_propio(&self) -> Result<StockProductos, ErrorVerStockPropio> {
             self._ver_stock_propio(self.env().caller())
-        } 
+        }
         
         //
-        // compras.rs: administrar compras    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // pedido.rs: administrar compras    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
         /// Compra una cantidad de un producto
@@ -283,7 +283,7 @@ mod rustaceo_libre {
         /// Devolverá error si el usuario no está registrado, la calificación no es válida (1..=5),
         /// la transacción no existe, no fue recibida o el usuario ya calificó esta transacción,
         #[ink(message)]
-        pub fn calificar_compra(&mut self, id_compra: u128, calificacion: u8) -> Result<(), ErrorCalificarPedido> {
+        pub fn calificar_pedido(&mut self, id_compra: u128, calificacion: u8) -> Result<(), ErrorCalificarPedido> {
             self._calificar_pedido(self.env().caller(), id_compra, calificacion)
         }
         
@@ -294,7 +294,7 @@ mod rustaceo_libre {
         /// Devuelve error si el usuario o pedido no existen, si el usuario no participa en el pedido,
         /// si el pedido ya fue cancelado o recibido y si quien solicita la cancelación ya la solicitó antes.
         #[ink(message)]
-        pub fn cancelar_compra(&mut self, id_compra: u128) -> Result<bool, ErrorCancelarPedido> {
+        pub fn cancelar_pedido(&mut self, id_compra: u128) -> Result<bool, ErrorCancelarPedido> {
             let operacion = self._cancelar_pedido(self.env().block_timestamp(), self.env().caller(), id_compra);
 
             let Ok(operacion) = operacion
@@ -309,7 +309,7 @@ mod rustaceo_libre {
         }
 
         //
-        // compra.rs: visualizar compras    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // pedido.rs: visualizar compras    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
         /// Devuelve las compras del usuario que lo ejecuta
