@@ -22,7 +22,7 @@ pub enum CategoriaProducto {
 
 //
 // producto
-//
+// 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -95,34 +95,163 @@ pub enum ErrorRetirarStockProducto {
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
-pub enum ErrorVerStockPropio {
-    UsuarioNoRegistrado,
-    NoEsVendedor,
-    NoPoseeStockAlguno,
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    fn setup_vendedor_y_producto() -> (RustaceoLibre, AccountId, u128) {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+        let mut contrato = RustaceoLibre::new();
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let rol = Rol::Vendedor(Default::default());
+        contrato.registrar_usuario(rol).unwrap();
+        let nombre: String = "Termo".into();
+        let descripcion: String = "Termo de acero".into();
+        let categoria = CategoriaProducto::Tecnologia;
+        let stock_inicial = 5;
+        let id_producto = contrato.registrar_producto(nombre, descripcion, categoria, stock_inicial).unwrap();
+        (contrato, vendedor, id_producto)
+    }
+
+    #[ink::test]
+    fn ingresar_stock_producto_falla_cantidad_invalida() {
+        let (mut contrato, vendedor, id_producto) = setup_vendedor_y_producto();
+        let res = contrato._ingresar_stock_producto(vendedor, id_producto, 0);
+        assert_eq!(res, Err(ErrorIngresarStockProducto::CantidadInvalida));
+    }
+
+    #[ink::test]
+    fn ingresar_stock_producto_falla_usuario_no_registrado() {
+        let mut contrato = RustaceoLibre::new();
+        let id_producto = 1;
+        let caller = AccountId::from([0x5; 32]);
+        let res = contrato._ingresar_stock_producto(caller, id_producto, 10);
+        assert_eq!(res, Err(ErrorIngresarStockProducto::UsuarioNoRegistrado));
+    }
+
+    #[ink::test]
+    fn ingresar_stock_producto_falla_no_es_vendedor() {
+        let mut contrato = RustaceoLibre::new();
+        let caller = AccountId::from([0x6; 32]);
+        let rol = Rol::Comprador(Default::default());
+        contrato._registrar_usuario(caller, rol).unwrap();
+        let id_producto = 1;
+        let res = contrato._ingresar_stock_producto(caller, id_producto, 10);
+        assert_eq!(res, Err(ErrorIngresarStockProducto::NoEsVendedor));
+    }
+
+    #[ink::test]
+    fn ingresar_stock_producto_falla_producto_inexistente() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+        let mut contrato = RustaceoLibre::new();
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let rol = Rol::Vendedor(Default::default());
+        contrato.registrar_usuario(rol).unwrap();
+        let id_producto = 9999;
+        let res = contrato._ingresar_stock_producto(vendedor, id_producto, 10);
+        assert_eq!(res, Err(ErrorIngresarStockProducto::ProductoInexistente));
+    }
+
+    #[ink::test]
+    fn ingresar_stock_producto_overflow() {
+        let (mut contrato, vendedor, id_producto) = setup_vendedor_y_producto();
+        // Set stock to max
+        let usuario = contrato.usuarios.get_mut(vendedor).unwrap();
+        usuario.establecer_stock_producto(&id_producto, &u32::MAX);
+        contrato.usuarios.insert(vendedor, usuario);
+        let res = contrato._ingresar_stock_producto(vendedor, id_producto, 1);
+        assert_eq!(res, Err(ErrorIngresarStockProducto::CantidadInvalida));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_falla_cantidad_invalida() {
+        let (mut contrato, vendedor, id_producto) = setup_vendedor_y_producto();
+        let res = contrato._retirar_stock_producto(vendedor, id_producto, 0);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::CantidadInvalida));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_falla_usuario_no_registrado() {
+        let mut contrato = RustaceoLibre::new();
+        let id_producto = 1;
+        let caller = AccountId::from([0x7; 32]);
+        let res = contrato._retirar_stock_producto(caller, id_producto, 1);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::UsuarioNoRegistrado));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_falla_no_es_vendedor() {
+        let mut contrato = RustaceoLibre::new();
+        let caller = AccountId::from([0x8; 32]);
+        let rol = Rol::Comprador(Default::default());
+        contrato._registrar_usuario(caller, rol).unwrap();
+        let id_producto = 1;
+        let res = contrato._retirar_stock_producto(caller, id_producto, 1);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::NoEsVendedor));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_falla_stock_insuficiente() {
+        let (mut contrato, vendedor, id_producto) = setup_vendedor_y_producto();
+        let res = contrato._retirar_stock_producto(vendedor, id_producto, 100);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::StockInsuficiente));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_underflow() {
+        let (mut contrato, vendedor, id_producto) = setup_vendedor_y_producto();
+        // Set stock to 1
+        let usuario = contrato.usuarios.get_mut(vendedor).unwrap();
+        usuario.establecer_stock_producto(&id_producto, &1);
+        contrato.usuarios.insert(vendedor, usuario);
+        let res = contrato._retirar_stock_producto(vendedor, id_producto, 2);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::StockInsuficiente));
+    }
+
+    #[ink::test]
+    fn ver_producto_ok() {
+        let (contrato, vendedor, id_producto) = setup_vendedor_y_producto();
+        let producto = contrato._ver_producto(vendedor, id_producto);
+        assert!(producto.is_some());
+    }
+
+    #[ink::test]
+    fn ver_producto_none_si_producto_no_existe() {
+        let (contrato, vendedor, _) = setup_vendedor_y_producto();
+        let producto = contrato._ver_producto(vendedor, 9999);
+        assert_eq!(producto, None);
+    }
+
+    #[ink::test]
+    fn ver_stock_propio_falla_usuario_no_registrado() {
+        let contrato = RustaceoLibre::new();
+        let caller = AccountId::from([0x9; 32]);
+        let res = contrato._ver_stock_propio(caller);
+        assert_eq!(res, Err(ErrorVerStockPropio::UsuarioNoRegistrado));
+    }
+
+    #[ink::test]
+    fn ver_stock_propio_falla_no_es_vendedor() {
+        let mut contrato = RustaceoLibre::new();
+        let caller = AccountId::from([0x10; 32]);
+        let rol = Rol::Comprador(Default::default());
+        contrato._registrar_usuario(caller, rol).unwrap();
+        let res = contrato._ver_stock_propio(caller);
+        assert_eq!(res, Err(ErrorVerStockPropio::NoEsVendedor));
+    }
+
+    #[ink::test]
+    fn ver_stock_propio_falla_no_posee_stock_alguno() {
+        let mut contrato = RustaceoLibre::new();
+        let caller = AccountId::from([0x11; 32]);
+        let rol = Rol::Vendedor(Default::default());
+        contrato._registrar_usuario(caller, rol).unwrap();
+        let res = contrato._ver_stock_propio(caller);
+        assert_eq!(res, Err(ErrorVerStockPropio::NoPoseeStockAlguno));
+    }
 }
-
-
-impl RustaceoLibre {
-
-    //
-
-    /// Registra un producto en la lista de productos
-    /// para su posterior uso en publicaciones
-    /// 
-    /// Devuelve error si el usuario no está registrado o no es vendedor.
-    pub(crate) fn _registrar_producto(&mut self, caller: AccountId, nombre: String, descripcion: String, categoria: CategoriaProducto, stock_inicial: u32) -> Result<u128, ErrorRegistrarProducto> {
-        // validar usuario
-        let Some(mut usuario) = self.usuarios.get(caller)
-        else { return Err(ErrorRegistrarProducto::UsuarioNoRegistrado); };
-
-        // validar que sea vendedor
-        if !usuario.es_vendedor() {
-            return Err(ErrorRegistrarProducto::NoEsVendedor);
-        }
-
-        // obtener id e instanciar producto
-        let id_producto = self.next_id_productos();
-        let producto = Producto::new(nombre, descripcion, categoria);
 
         // guardar producto
         self.productos.insert(id_producto, producto);
