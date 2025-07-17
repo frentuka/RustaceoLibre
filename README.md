@@ -1,4 +1,6 @@
-![alt text](https://github.com/frentuka/RustaceoLibre/blob/master/logo.png "Rustaceo Libre")
+<p align="center">
+  <img src="[http://some_place.com/image.png](https://github.com/frentuka/RustaceoLibre/blob/master/logo.png)" />
+</p>
 
 # Rustaceo Libre: Estructura
 
