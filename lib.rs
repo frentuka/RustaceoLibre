@@ -5,29 +5,43 @@ mod structs;
 #[allow(non_local_definitions)] // error molesto
 #[ink::contract]
 mod rustaceo_libre {
-    use ink::storage::Mapping;
-    use ink::prelude::{vec::Vec, string::String, collections::BTreeMap};
+    use ink::{
+        prelude::vec::Vec,
+        prelude::string::String,
+        prelude::collections::BTreeMap,
+        storage::Mapping,
+    };
 
-    // structs propias
+    //
+    // imports propios
+    //
+
     use crate::structs::usuario::{
-        Usuario,
-        Rol,
-        ErrorRegistrarUsuario,
-        ErrorAscenderRolUsuario,
+        ErrorAscenderRolUsuario, ErrorRegistrarUsuario, Rol, StockProductos, Usuario
     };
+
     use crate::structs::producto::{
-        Producto,
-        CategoriaProducto,
-        ErrorRegistrarProducto,
+        CategoriaProducto, ErrorIngresarStockProducto, ErrorRegistrarProducto, ErrorRetirarStockProducto, ErrorVerStockPropio, Producto
     };
+
     use crate::structs::publicacion::{
         Publicacion,
-        ErrorRealizarPublicacion,
         ErrorModificarCantidadOfertada,
-        ErrorVerPublicacionesVendedor
+        ErrorVerPublicacionesVendedor,
+        ErrorRealizarPublicacion,
     };
-    use crate::structs::compra::{
-        Compra, ErrorCancelarCompra, ErrorCompraDespachada, ErrorCompraRecibida, ErrorComprarProducto, ErrorReclamarFondos, ErrorVerCompras, ErrorVerVentas, EstadoCompra
+
+    use crate::structs::pedido::{
+        Pedido,
+        EstadoPedido,
+        ErrorProductoDespachado,
+        ErrorProductoRecibido,
+        ErrorCalificarPedido,
+        ErrorComprarProducto,
+        ErrorCancelarPedido,
+        ErrorReclamarFondos,
+        ErrorVerCompras,
+        ErrorVerVentas,
     };
 
     //
@@ -40,13 +54,13 @@ mod rustaceo_libre {
         /// <ID del usuario, Usuario>
         pub usuarios: Mapping<AccountId, Usuario>,
         /// <ID, Compra>
-        pub compras: BTreeMap<u128, Compra>,
+        pub pedidos: BTreeMap<u128, Pedido>,
         /// <ID, Producto>
         pub productos: BTreeMap<u128, Producto>,
         /// <ID, Publicacion>
         pub publicaciones: BTreeMap<u128, Publicacion>,
         /// Lleva un recuento de la próxima ID disponible para las compras.
-        compras_siguiente_id: u128,
+        pedidos_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para los productos.
         productos_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para las publicaciones.
@@ -73,10 +87,10 @@ mod rustaceo_libre {
         fn _new() -> Self {
             Self {
                 usuarios: Default::default(),
-                compras: Default::default(),
+                pedidos: Default::default(),
                 productos: Default::default(),
                 publicaciones: Default::default(),
-                compras_siguiente_id: 0,
+                pedidos_siguiente_id: 0,
                 productos_siguiente_id: 0,
                 publicaciones_siguiente_id: 0,
                 owner: Self::env().caller(),
@@ -153,6 +167,26 @@ mod rustaceo_libre {
         pub fn registrar_producto(&mut self, nombre: String, descripcion: String, categoria: CategoriaProducto, stock_inicial: u32) -> Result<u128, ErrorRegistrarProducto> {
             self._registrar_producto(self.env().caller(), nombre, descripcion, categoria, stock_inicial)
         }
+
+        /// Dada la ID de un producto y un stock, incrementa la posesión en stock de ese producto del vendedor.
+        /// 
+        /// Devolverá la nueva cantidad de stock disponible de ese producto para el vendedor.
+        /// Devolverá error si la cantidad ingresada es cero, el usuario no está registrado,
+        /// no es vendedor o el producto no existe.
+        #[ink(message)]
+        pub fn ingresar_stock_producto(&mut self, id_producto: u128, cantidad_ingresada: u32) -> Result<u32, ErrorIngresarStockProducto> {
+            self._ingresar_stock_producto(self.env().caller(), id_producto, cantidad_ingresada)
+        }
+
+        /// Dada la ID de un producto y un stock, decrementa la posesión en stock de ese producto del vendedor.
+        /// 
+        /// Devolverá la nueva cantidad de stock disponible de ese producto para el vendedor.
+        /// Devolverá error si la cantidad ingresada es cero, el usuario no está registrado,
+        /// no es vendedor o el producto no existe.
+        #[ink(message)]
+        pub fn retirar_stock_producto(&mut self, id_producto: u128, cantidad_retirada: u32) -> Result<u32, ErrorRetirarStockProducto> {
+            self._retirar_stock_producto(self.env().caller(), id_producto, cantidad_retirada)
+        }
         
         /// Dada una ID, devuelve la publicación del producto
         /// 
@@ -161,6 +195,14 @@ mod rustaceo_libre {
         pub fn ver_producto(&self, id_producto: u128) -> Option<Producto> {
             self._ver_producto(self.env().caller(), id_producto)
         }
+
+        /// Devuelve el listado de stock del vendedor que llame la función
+        /// 
+        /// Dará error si el usuario no está registrado, no es vendedor o no posee stock de ningún producto
+        #[ink(message)]
+        pub fn ver_stock_propio(&self) -> Result<StockProductos, ErrorVerStockPropio> {
+            self._ver_stock_propio(self.env().caller())
+        } 
         
         //
         // compras.rs: administrar compras    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,22 +215,29 @@ mod rustaceo_libre {
         #[ink(message, payable)]
         pub fn comprar_producto(&mut self, id_publicacion: u128, cantidad: u32) -> Result<u128, ErrorComprarProducto> {
             let operacion = self._comprar_producto(self.env().block_timestamp(), self.env().caller(), id_publicacion, cantidad, self.env().transferred_value());
-            
-            // si la operación es erronea por cualquier motivo, devolver fondos
-            if operacion.is_err() {
+
+            if let Ok(operacion) = operacion {
+                // devolver fondos sobrantes. el checkeo tal vez es innecesario pero por si acaso
+                if operacion.monto_transferido_sobrante > 0 {
+                    let _ = self.env().transfer(self.env().caller(), operacion.monto_transferido_sobrante);
+                }
+
+                Ok(operacion.id_nueva_transaccion)
+            } else {
+                // fallo: devolver totalidad de los fondos transferidos
                 let _ = self.env().transfer(self.env().caller(), self.env().transferred_value());
+                Err(operacion.unwrap_err())
             }
-            
-            operacion
         }
 
         /// Política de reclamo:
         /// 
-        /// Si el vendedor despachó la compra y el comprador no la marcó como recibida después de 30 días,
-        /// el comprador puede reclamar los fondos de la compra y la misma se marcará automáticamente como recibida.
+        /// Si el vendedor despachó el producto y el comprador no lo marcó como recibido después de 60 días,
+        /// el vendedor puede reclamar los fondos del pedido y la misma se marcará automáticamente como recibida,
+        /// sin necesidad de consentimiento ni voluntad del comprador.
         /// 
-        /// Puede dar error si el usuario no está registrado, la compra no existe,
-        /// el usuario no es el vendedor de la compra o su reclamo no condice con la política de reclamo
+        /// Puede dar error si el usuario no está registrado, la transacción no existe,
+        /// el usuario no es el vendedor de la publicación o el tiempo pasado no condice con la política de reclamo
         #[ink(message)]
         pub fn reclamar_fondos(&mut self, id_compra: u128) -> Result<u128, ErrorReclamarFondos> {
             let operacion = self._reclamar_fondos(self.env().block_timestamp(), self.env().caller(), id_compra);
@@ -201,24 +250,24 @@ mod rustaceo_libre {
             operacion
         }
 
-        /// Si la compra indicada está pendiente y el usuario es el vendedor, se establece como recibida.
+        /// Si el pedido indicada está pendiente y el usuario es el vendedor, se establece como recibida.
         /// 
-        /// Puede dar error si el usuario no está registrado, la compra no existe,
-        /// la compra no está pendiente, ya fue recibida, es el cliente quien intenta despacharla
-        /// o ya fue cancelada.
+        /// Puede dar error si el usuario no está registrado, el pedido no existe,
+        /// no está pendiente, ya fue recibido, no es el vendedor quien intenta despacharlo
+        /// o ya fue cancelado.
         #[ink(message)]
-        pub fn compra_despachada(&mut self, compra_id: u128) -> Result<(), ErrorCompraDespachada> {
-            self._compra_despachada(self.env().block_timestamp(), self.env().caller(), compra_id)
+        pub fn pedido_despachado(&mut self, compra_id: u128) -> Result<(), ErrorProductoDespachado> {
+            self._pedido_despachado(self.env().block_timestamp(), self.env().caller(), compra_id)
         }
         
-        /// Si la compra indicada fue despachada y el usuario es el comprador, se establece como recibida.
+        /// Si el pedido indicado fue despachado y el usuario es el comprador, se establece como recibido.
         /// 
         /// Puede dar error si el usuario no está registrado, la compra no existe,
-        /// la compra no fue despachada, ya fue recibida, es el vendedor quien intenta recibirla
-        /// o ya fue cancelada.
+        /// la compra no fue despachada, ya fue recibida, no es el comprador quien intenta recibirlo
+        /// o ya fue cancelado.
         #[ink(message)]
-        pub fn compra_recibida(&mut self, id_compra: u128) -> Result<(), ErrorCompraRecibida> {
-            let operacion = self._compra_recibida(self.env().block_timestamp(), self.env().caller(), id_compra);
+        pub fn pedido_recibido(&mut self, id_compra: u128) -> Result<(), ErrorProductoRecibido> {
+            let operacion = self._pedido_recibido(self.env().block_timestamp(), self.env().caller(), id_compra);
 
             let Ok((vendedor, valor)) = operacion
             else { return Err(operacion.unwrap_err()) };
@@ -227,15 +276,26 @@ mod rustaceo_libre {
 
             Ok(())
         }
-        
-        /// Cancela la compra si ambos participantes de la misma ejecutan esta misma función
-        /// y si ésta no fue recibida ni ya cancelada.
+
+        /// Dada una ID de pedido y una calificación (1..=5), se califica el mismo.
+        /// Sólo se puede calificar una vez y sólo pueden calificar el comprador y vendedor de un pedido.
         /// 
-        /// Devuelve error si el usuario o la compra no existen, si el usuario no participa en la compra,
-        /// si la compra ya fue cancelada o recibida y si quien solicita la cancelación ya la solicitó antes.
+        /// Devolverá error si el usuario no está registrado, la calificación no es válida (1..=5),
+        /// la transacción no existe, no fue recibida o el usuario ya calificó esta transacción,
         #[ink(message)]
-        pub fn cancelar_compra(&mut self, id_compra: u128) -> Result<bool, ErrorCancelarCompra> {
-            let operacion = self._cancelar_compra(self.env().block_timestamp(), self.env().caller(), id_compra);
+        pub fn calificar_compra(&mut self, id_compra: u128, calificacion: u8) -> Result<(), ErrorCalificarPedido> {
+            self._calificar_pedido(self.env().caller(), id_compra, calificacion)
+        }
+        
+        /// Cancela el pedido si ambos participantes del mismo ejecutan esta misma función
+        /// y si éste no fue recibida ni ya cancelada.
+        /// Entrega automáticamente los fondos de la compra al comprador y el stock al vendedor.
+        /// 
+        /// Devuelve error si el usuario o pedido no existen, si el usuario no participa en el pedido,
+        /// si el pedido ya fue cancelado o recibido y si quien solicita la cancelación ya la solicitó antes.
+        #[ink(message)]
+        pub fn cancelar_compra(&mut self, id_compra: u128) -> Result<bool, ErrorCancelarPedido> {
+            let operacion = self._cancelar_pedido(self.env().block_timestamp(), self.env().caller(), id_compra);
 
             let Ok(operacion) = operacion
             else { return Err(operacion.unwrap_err()) };
@@ -256,7 +316,7 @@ mod rustaceo_libre {
         /// 
         /// Dará error si el usuario no está registrado como comprador o no tiene compras
         #[ink(message)]
-        pub fn ver_compras(&self) -> Result<Vec<Compra>, ErrorVerCompras> {
+        pub fn ver_compras(&self) -> Result<Vec<Pedido>, ErrorVerCompras> {
             self._ver_compras(self.env().caller())
         }
 
@@ -264,7 +324,7 @@ mod rustaceo_libre {
         /// 
         /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
         #[ink(message)]
-        pub fn ver_compras_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ErrorVerCompras> {
+        pub fn ver_compras_estado(&self, estado: EstadoPedido) -> Result<Vec<Pedido>, ErrorVerCompras> {
             self._ver_compras_estado(self.env().caller(), estado)
         }
 
@@ -272,19 +332,19 @@ mod rustaceo_libre {
         /// 
         /// Dará error si el usuario no está registrado como comprador o no tiene compras en ese estado
         #[ink(message)]
-        pub fn ver_compras_categoria(&self, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerCompras> {
+        pub fn ver_compras_categoria(&self, categoria: CategoriaProducto) -> Result<Vec<Pedido>, ErrorVerCompras> {
             self._ver_compras_categoria(self.env().caller(), categoria)
         }
 
         //
-        // compras.rs: visualizar ventas    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // pedido.rs: visualizar ventas    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
         
         /// Devuelve las ventas del usuario que lo ejecuta
         /// 
         /// Dará error si el usuario no está registrado como vendedor o no tiene ventas
         #[ink(message)]
-        pub fn ver_ventas(&self) -> Result<Vec<Compra>, ErrorVerVentas> {
+        pub fn ver_ventas(&self) -> Result<Vec<Pedido>, ErrorVerVentas> {
             self._ver_ventas(self.env().caller())
         }
 
@@ -292,7 +352,7 @@ mod rustaceo_libre {
         /// 
         /// Dará error si el usuario no está registrado como vendedor o no tiene ventas en ese estado
         #[ink(message)]
-        pub fn ver_ventas_estado(&self, estado: EstadoCompra) -> Result<Vec<Compra>, ErrorVerVentas> {
+        pub fn ver_ventas_estado(&self, estado: EstadoPedido) -> Result<Vec<Pedido>, ErrorVerVentas> {
             self._ver_ventas_estado(self.env().caller(), estado)
         }
 
@@ -300,7 +360,7 @@ mod rustaceo_libre {
         /// 
         /// Dará error si el usuario no está registrado como vendedor o no tiene ventas en ese estado
         #[ink(message)]
-        pub fn ver_ventas_categoria(&self, categoria: CategoriaProducto) -> Result<Vec<Compra>, ErrorVerVentas> {
+        pub fn ver_ventas_categoria(&self, categoria: CategoriaProducto) -> Result<Vec<Pedido>, ErrorVerVentas> {
             self._ver_ventas_categoria(self.env().caller(), categoria)
         }
 
@@ -322,24 +382,24 @@ mod rustaceo_libre {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-        /// Devuelve la siguiente ID disponible para compras
+        /// Devuelve la siguiente ID disponible para pedidos
         /// 
         /// Si la próxima ID causaría Overflow, devuelve 0 y reinicia la cuenta.
-        pub fn next_id_compras(&mut self) -> u128 {
-            let id = self.compras_siguiente_id; // obtener actual
-            let add_res = self.compras_siguiente_id.checked_add(1); // sumarle 1 al actual para que apunte a un id desocupado
+        pub fn next_id_pedidos(&mut self) -> u128 {
+            let id = self.pedidos_siguiente_id; // obtener actual
+            let add_res = self.pedidos_siguiente_id.checked_add(1); // sumarle 1 al actual para que apunte a un id desocupado
             
             let Some(add_res) = add_res
             else {
-                self.compras_siguiente_id = 1;
+                self.pedidos_siguiente_id = 1;
                 return 0;
             };
 
-            self.compras_siguiente_id = add_res;
+            self.pedidos_siguiente_id = add_res;
             id // devolver
         }
 
-        /// Devuelve la siguiente ID disponible para compras
+        /// Devuelve la siguiente ID disponible para productos
         /// 
         /// Si la próxima ID causaría Overflow, devuelve 0 y reinicia la cuenta.
         pub fn next_id_productos(&mut self) -> u128 {
@@ -382,21 +442,37 @@ mod rustaceo_libre {
         /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
 
+        #[ink::test]
+        fn new_works() {
+            let rustaceo_libre = RustaceoLibre::new();
+            assert_eq!(rustaceo_libre.pedidos_siguiente_id, 0);
+        }
+
         /// We test if the default constructor does its job.
         #[ink::test]
         fn default_works() {
             let rustaceo_libre = RustaceoLibre::default();
-            assert_eq!(rustaceo_libre.compras_siguiente_id, 0);
+            assert_eq!(rustaceo_libre.pedidos_siguiente_id, 0);
         }
 
         /// We test a simple use case of our contract.
         #[ink::test]
-        fn it_works() {
+        fn next_id_works() {
             let mut rustaceo_libre = RustaceoLibre::new();
-            assert_eq!(rustaceo_libre.next_id_compras(), 0);
-            assert_eq!(rustaceo_libre.next_id_compras(), 1);
+            assert_eq!(rustaceo_libre.next_id_pedidos(), 0);
+            assert_eq!(rustaceo_libre.next_id_pedidos(), 1);
+            assert_eq!(rustaceo_libre.next_id_productos(), 0);
+            assert_eq!(rustaceo_libre.next_id_productos(), 1);
             assert_eq!(rustaceo_libre.next_id_publicaciones(), 0);
             assert_eq!(rustaceo_libre.next_id_publicaciones(), 1);
+
+            rustaceo_libre.pedidos_siguiente_id = u128::MAX;
+            rustaceo_libre.productos_siguiente_id = u128::MAX;
+            rustaceo_libre.publicaciones_siguiente_id = u128::MAX;
+
+            assert_eq!(rustaceo_libre.next_id_pedidos(), 0);
+            assert_eq!(rustaceo_libre.next_id_productos(), 0);
+            assert_eq!(rustaceo_libre.next_id_publicaciones(), 0);
         }
     }
 }

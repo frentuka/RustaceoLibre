@@ -1,7 +1,7 @@
 use ink::{prelude::string::String, primitives::AccountId};
 
 
-use crate::rustaceo_libre::RustaceoLibre;
+use crate::{rustaceo_libre::RustaceoLibre, structs::usuario::StockProductos};
 
 //
 // categoria
@@ -62,6 +62,46 @@ pub enum ErrorRegistrarProducto {
     NoEsVendedor,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub enum ErrorIngresarStockProducto {
+    CantidadInvalida,
+    UsuarioNoRegistrado,
+    NoEsVendedor,
+    ProductoInexistente
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub enum ErrorRetirarStockProducto {
+    CantidadInvalida,
+    UsuarioNoRegistrado,
+    NoEsVendedor,
+    StockInsuficiente,
+    ProductoInexistente
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub enum ErrorVerStockPropio {
+    UsuarioNoRegistrado,
+    NoEsVendedor,
+    NoPoseeStockAlguno,
+}
+
+
 impl RustaceoLibre {
 
     //
@@ -96,7 +136,86 @@ impl RustaceoLibre {
 
     //
 
-    /// Dada una ID, devuelve el producto si es posible
+    /// Dada la ID de un producto y un stock, incrementa la posesión en stock de ese producto del vendedor.
+    /// 
+    /// Devolverá la nueva cantidad de stock disponible de ese producto para el vendedor.
+    /// Devolverá error si la cantidad ingresada es cero, el usuario no está registrado,
+    /// no es vendedor o el producto no existe.
+    pub(crate) fn _ingresar_stock_producto(&mut self, caller: AccountId, id_producto: u128, cantidad_ingresada: u32) -> Result<u32, ErrorIngresarStockProducto> {
+        // validar cantidad
+        if cantidad_ingresada < 1 {
+            return Err(ErrorIngresarStockProducto::CantidadInvalida);
+        }
+        
+        // validar usuario
+        let Some(mut usuario) = self.usuarios.get(caller)
+        else { return Err(ErrorIngresarStockProducto::UsuarioNoRegistrado); };
+
+        // validar que sea vendedor
+        if !usuario.es_vendedor() {
+            return Err(ErrorIngresarStockProducto::NoEsVendedor);
+        }
+
+        // validar que exista el producto
+        if !self.productos.contains_key(&id_producto) {
+            return Err(ErrorIngresarStockProducto::ProductoInexistente);
+        }
+
+        // validar cantidad #2
+        let stock_actual = if let Some(stock) = usuario.obtener_stock_producto(&id_producto) { stock } else { 0 };
+        let Some(nuevo_stock_actual) = stock_actual.checked_add(cantidad_ingresada)
+        else { return Err(ErrorIngresarStockProducto::CantidadInvalida); };
+
+        // todo bien
+        usuario.establecer_stock_producto(&id_producto, &nuevo_stock_actual);
+        self.usuarios.insert(usuario.id, &usuario);
+
+        Ok(nuevo_stock_actual)
+    }
+
+    //
+
+    /// Dada la ID de un producto y un stock, decrementa la posesión en stock de ese producto del vendedor.
+    /// 
+    /// Devolverá la nueva cantidad de stock disponible de ese producto para el vendedor.
+    /// Devolverá error si la cantidad ingresada es cero, el usuario no está registrado,
+    /// no es vendedor o el producto no existe.
+    pub(crate) fn _retirar_stock_producto(&mut self, caller: AccountId, id_producto: u128, cantidad_retirada: u32) -> Result<u32, ErrorRetirarStockProducto> {
+        // validar cantidad
+        if cantidad_retirada < 1 {
+            return Err(ErrorRetirarStockProducto::CantidadInvalida);
+        }
+        
+        // validar usuario
+        let Some(mut usuario) = self.usuarios.get(caller)
+        else { return Err(ErrorRetirarStockProducto::UsuarioNoRegistrado); };
+
+        // validar que sea vendedor
+        if !usuario.es_vendedor() {
+            return Err(ErrorRetirarStockProducto::NoEsVendedor);
+        }
+
+        // validar que el stock del vendedor sea suficiente
+        let stock_actual = if let Some(stock) = usuario.obtener_stock_producto(&id_producto) { stock } else { 0 };
+        if stock_actual < cantidad_retirada {
+            return Err(ErrorRetirarStockProducto::StockInsuficiente);
+        }
+
+        // validar cantidad #2
+        let stock_actual = if let Some(stock) = usuario.obtener_stock_producto(&id_producto) { stock } else { 0 };
+        let Some(nuevo_stock_actual) = stock_actual.checked_sub(cantidad_retirada)
+        else { return Err(ErrorRetirarStockProducto::CantidadInvalida); };
+
+        // todo bien
+        usuario.establecer_stock_producto(&id_producto, &nuevo_stock_actual);
+        self.usuarios.insert(usuario.id, &usuario);
+
+        Ok(nuevo_stock_actual)
+    }
+
+    //
+
+    /// Dada una ID, devuelve el producto correspondiente si es posible
     /// 
     /// Devolverá None si el producto no existe o el usuario no está registrado
     pub(crate) fn _ver_producto(&self, caller: AccountId, id_producto: u128) -> Option<Producto> {
@@ -106,14 +225,39 @@ impl RustaceoLibre {
 
         self.productos.get(&id_producto).cloned()
     }
+
+    /// Devuelve el listado de stock del vendedor que llame la función
+    /// 
+    /// Dará error si el usuario no está registrado, no es vendedor o no posee stock de ningún producto
+    pub(crate) fn _ver_stock_propio(&self, caller: AccountId) -> Result<StockProductos, ErrorVerStockPropio> {
+        let Some(usuario) = self.usuarios.get(caller)
+        else { return Err(ErrorVerStockPropio::UsuarioNoRegistrado); };
+
+        if !usuario.es_vendedor() {
+            return Err(ErrorVerStockPropio::NoEsVendedor);
+        }
+
+        let Some(stock_productos) = usuario.obtener_stock_productos()
+        else { return Err(ErrorVerStockPropio::NoPoseeStockAlguno); };
+
+        Ok(stock_productos)
+    }
+
 }
 
 
 #[cfg(test)]
 mod tests {
+        use ink_e2e::alice;
+
         use super::*;
         use crate::structs::usuario::Rol;
         use crate::structs::producto::{CategoriaProducto, Producto};
+    
+    //
+    // registrar producto
+    //
+
     #[ink::test]
     fn registrar_producto_works() {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
@@ -156,7 +300,6 @@ mod tests {
         let stock = usuario.obtener_stock_producto(&id_producto);
         assert_eq!(stock, Some(stock_inicial));
     }
-
     #[ink::test]
     fn registrar_producto_falla_usuario_no_registrado() {
         let mut contrato = RustaceoLibre::default();
@@ -189,6 +332,75 @@ mod tests {
         
         assert_eq!(result, Err(ErrorRegistrarProducto::NoEsVendedor));
     }
+    
+    //
+    // ingresar stock
+    //
+
+    #[ink::test]
+    fn ingresar_retirar_stock_productos_works() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+        
+        // Crear contrato
+        let mut contrato = RustaceoLibre::new();
+
+        // Crear producto
+        let producto = Producto {
+            nombre: "asd".to_string(),
+            descripcion: "asd".to_string(),
+            categoria: CategoriaProducto::Hogar,
+        };
+
+        // Registrarlo forzosamente
+        let id_producto = contrato.next_id_productos();
+        contrato.productos.insert(id_producto, producto);
+
+        // Simular llamado como Alice
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+
+        // Registrar a Alice como Vendedor
+        let rol = Rol::Vendedor(Default::default());
+        assert_eq!(contrato.registrar_usuario(rol), Ok(()));
+
+        // Ingresar stock
+        let res = contrato.ingresar_stock_producto(id_producto, 13548);
+        let Ok(res) = res
+        else { panic!("res debería ser Ok"); };
+
+        assert_eq!(res, 13548);
+
+        let stock = contrato.ver_stock_propio();
+        let Ok(stock) = stock else { panic!("stock debería ser Ok"); };
+
+        let Some(stock) = stock.get(&id_producto)
+        else { panic!("stock debería ser Ok") };
+
+        assert_eq!(stock, 13548);
+
+        //
+        // retirar stock
+        //
+
+        let res = contrato.retirar_stock_producto(id_producto, 10000);
+        let Ok(res) = res
+        else { panic!("res debería ser Ok"); };
+
+        assert_eq!(res, 3548);
+
+        let stock = contrato.ver_stock_propio();
+        let Ok(stock) = stock else { panic!("stock debería ser Ok"); };
+
+        let Some(stock) = stock.get(&id_producto)
+        else { panic!("stock debería ser Ok") };
+
+        assert_eq!(stock, 3548);
+    }
+
+    //
+    // ver producto
+    //
+    
     #[ink::test]
     fn ver_producto_falla_usuario_no_registrado() {
     let contrato = RustaceoLibre::default();
@@ -199,5 +411,9 @@ mod tests {
 
     assert_eq!(resultado, None);
 }
+
+    //
+    // ver stock propio
+    //
 
 }
