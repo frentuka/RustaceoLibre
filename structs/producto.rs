@@ -337,11 +337,11 @@ mod tests {
     //
 
     #[ink::test]
-    fn ingresar_stock_producto_falla_cantidad_invalida() {
+    fn ingresar_stock_producto_falla_producto_inexistente() {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let vendedor = accounts.alice;
 
-    
+        // Crear contrato
         let mut contrato = RustaceoLibre::new();
 
         // Registrar a Alice como Vendedor
@@ -349,19 +349,13 @@ mod tests {
         let rol = Rol::Vendedor(Default::default());
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
-        let producto = Producto {
-            nombre: "Producto".to_string(),
-            descripcion: "Desc".to_string(),
-            categoria: CategoriaProducto::Hogar,
-        };
-        let id_producto = contrato.next_id_productos();
-        contrato.productos.insert(id_producto, producto);
+        // Usar un id_producto que NO existe en el mapa de productos
+        let id_producto_inexistente = 9999;
 
-    
-        let res = contrato._ingresar_stock_producto(vendedor, id_producto, 0);
-        assert_eq!(res, Err(ErrorIngresarStockProducto::CantidadInvalida));
+        // Intentar ingresar stock para ese producto
+        let res = contrato._ingresar_stock_producto(vendedor, id_producto_inexistente, 10);
+        assert_eq!(res, Err(ErrorIngresarStockProducto::ProductoInexistente));
     }
-
     #[ink::test]
     fn ingresar_stock_producto_falla_usuario_no_registrado() {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
@@ -404,23 +398,150 @@ mod tests {
         assert_eq!(res, Err(ErrorIngresarStockProducto::NoEsVendedor));
     }
 
+    #[ink::test]
+    fn ingresar_stock_producto_falla_cantidad_invalida() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+
+    
+        let mut contrato = RustaceoLibre::new();
+
+        // Registrar a Alice como Vendedor
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let rol = Rol::Vendedor(Default::default());
+        assert_eq!(contrato.registrar_usuario(rol), Ok(()));
+
+        let producto = Producto {
+            nombre: "Producto".to_string(),
+            descripcion: "Desc".to_string(),
+            categoria: CategoriaProducto::Hogar,
+        };
+        let id_producto = contrato.next_id_productos();
+        contrato.productos.insert(id_producto, producto);
+
+    
+        let res = contrato._ingresar_stock_producto(vendedor, id_producto, 0);
+        assert_eq!(res, Err(ErrorIngresarStockProducto::CantidadInvalida));
+    }
+
+    
+    //
+    // retirar stock
+    //
+    #[ink::test]
+
+    fn retirar_stock_producto_falla_stock_insuficiente() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+
+        let mut contrato = RustaceoLibre::new();
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+
+        // Registrar a Alice como Vendedor
+        let rol = Rol::Vendedor(Default::default());
+        assert_eq!(contrato.registrar_usuario(rol), Ok(()));
+
+    
+        let producto = Producto {
+            nombre: "Producto".to_string(),
+            descripcion: "Desc".to_string(),
+            categoria: CategoriaProducto::Hogar,
+        };
+        let id_producto = contrato.next_id_productos();
+        contrato.productos.insert(id_producto, producto);
+
+        // Ingresar stock menor al que se intentará retirar
+        let _ = contrato._ingresar_stock_producto(vendedor, id_producto, 3);
+
+        // Intentar retirar más stock del disponible
+        let res = contrato._retirar_stock_producto(vendedor, id_producto, 5);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::StockInsuficiente));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_falla_cantidad_invalida() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+
+        let mut contrato = RustaceoLibre::new();
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let rol = Rol::Vendedor(Default::default());
+        assert_eq!(contrato.registrar_usuario(rol), Ok(()));
+
+        let producto = Producto {
+            nombre: "Producto".to_string(),
+            descripcion: "Desc".to_string(),
+            categoria: CategoriaProducto::Hogar,
+        };
+        let id_producto = contrato.next_id_productos();
+        contrato.productos.insert(id_producto, producto);
+
+        let _ = contrato._ingresar_stock_producto(vendedor, id_producto, 10);
+
+        // Intentar retirar cantidad inválida (0)
+        let res = contrato._retirar_stock_producto(vendedor, id_producto, 0);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::CantidadInvalida));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_falla_no_es_vendedor() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let comprador = accounts.bob;
+
+        let mut contrato = RustaceoLibre::new();
+
+        // Registrar a Bob como Comprador
+        let rol = Rol::Comprador(Default::default());
+        assert_eq!(contrato._registrar_usuario(comprador, rol), Ok(()));
+
+        let producto = Producto {
+            nombre: "Producto".to_string(),
+            descripcion: "Desc".to_string(),
+            categoria: CategoriaProducto::Hogar,
+        };
+        let id_producto = contrato.next_id_productos();
+        contrato.productos.insert(id_producto, producto);
+
+        // Intentar retirar stock siendo solo comprador
+        let res = contrato._retirar_stock_producto(comprador, id_producto, 5);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::NoEsVendedor));
+    }
+
+
+    #[ink::test]
+    fn retirar_stock_producto_falla_usuario_no_registrado() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+
+        let mut contrato = RustaceoLibre::new();
+
+        // Crear y registrar producto, pero NO registrar usuario
+        let producto = Producto {
+            nombre: "Producto".to_string(),
+            descripcion: "Desc".to_string(),
+            categoria: CategoriaProducto::Hogar,
+        };
+        let id_producto = contrato.next_id_productos();
+        contrato.productos.insert(id_producto, producto);
+
+        // Intentar retirar stock sin usuario registrado
+        let res = contrato._retirar_stock_producto(vendedor, id_producto, 5);
+        assert_eq!(res, Err(ErrorRetirarStockProducto::UsuarioNoRegistrado));
+    }
 
     #[ink::test]
     fn ingresar_retirar_stock_productos_works() {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let vendedor = accounts.alice;
         
-        // Crear contrato
         let mut contrato = RustaceoLibre::new();
 
-        // Crear producto
         let producto = Producto {
             nombre: "asd".to_string(),
             descripcion: "asd".to_string(),
             categoria: CategoriaProducto::Hogar,
         };
 
-        // Registrarlo forzosamente
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
 
@@ -431,7 +552,7 @@ mod tests {
         let rol = Rol::Vendedor(Default::default());
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
-        // Ingresar stock
+
         let res = contrato.ingresar_stock_producto(id_producto, 13548);
         let Ok(res) = res
         else { panic!("res debería ser Ok"); };
@@ -446,9 +567,6 @@ mod tests {
 
         assert_eq!(stock, 13548);
 
-        //
-        // retirar stock
-        //
 
         let res = contrato.retirar_stock_producto(id_producto, 10000);
         let Ok(res) = res
