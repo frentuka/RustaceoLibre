@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="[http://some_place.com/image.png](https://github.com/frentuka/RustaceoLibre/blob/master/logo.png)" />
+  <img src="https://github.com/frentuka/RustaceoLibre/blob/master/logo.png" />
 </p>
 
 # Rustaceo Libre: Estructura
