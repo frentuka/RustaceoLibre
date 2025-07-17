@@ -82,6 +82,7 @@ pub enum ErrorComprarProducto {
     UsuarioInexistente,
     UsuarioNoEsComprador,
     PublicacionInexistente,
+    VendedorAutocomprandose,
     VendedorInexistente,
     StockInsuficiente,
     ValorTransferidoInsuficiente,
@@ -229,6 +230,11 @@ impl RustaceoLibre {
         // validar publicacion
         let Some(publicacion) = self.publicaciones.get(&id_publicacion).cloned()
         else { return Err(ErrorComprarProducto::PublicacionInexistente); };
+
+        // validar que el vendedor no sea el comprador
+        if caller == publicacion.vendedor {
+            return Err(ErrorComprarProducto::VendedorAutocomprandose);
+        }
 
         // validar vendedor
         let id_vendedor = publicacion.vendedor;
