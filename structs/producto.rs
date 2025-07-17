@@ -408,7 +408,7 @@ mod tests {
 
         // Registrar a Alice como Vendedor
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
-        let rol = Rol::Vendedor(Default::default());
+        let rol = RolDeSeleccion::Vendedor;
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
         let producto = Producto {
@@ -438,7 +438,7 @@ mod tests {
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
 
         // Registrar a Alice como Vendedor
-        let rol = Rol::Vendedor(Default::default());
+        let rol = RolDeSeleccion::Vendedor;
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
     
@@ -465,7 +465,7 @@ mod tests {
 
         let mut contrato = RustaceoLibre::new();
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
-        let rol = Rol::Vendedor(Default::default());
+        let rol = RolDeSeleccion::Vendedor;
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
 
         let producto = Producto {
@@ -491,7 +491,7 @@ mod tests {
         let mut contrato = RustaceoLibre::new();
 
         // Registrar a Bob como Comprador
-        let rol = Rol::Comprador(Default::default());
+        let rol = RolDeSeleccion::Comprador;
         assert_eq!(contrato._registrar_usuario(comprador, rol), Ok(()));
 
         let producto = Producto {
