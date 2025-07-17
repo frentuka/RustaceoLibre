@@ -1,9 +1,9 @@
 
-# Rustaceo Libre
+# Rustaceo Libre: Estructura
 
 Rustaceo Libre es un marketplace «al estilo Mercado Libre» desarrollado en Ink!
 
-## Estructura de los sistemas
+Esta es descripción de la estructura del sistema, implementando todo lo solicitado por la cátedra y agregando o reimaginando algunas funcionalidades
 
 ### Usuario
 
