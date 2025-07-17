@@ -93,6 +93,18 @@ pub struct DataVendedor {
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
+pub enum RolDeSeleccion {
+    Comprador,
+    Vendedor,
+    Ambos,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
 pub enum Rol {
     Comprador(DataComprador), // compras
     Vendedor(DataVendedor), // ventas, publicaciones, stock_productos
@@ -383,11 +395,17 @@ impl RustaceoLibre {
     /// Registra un usuario en el Mapping de usuarios.
     /// 
     /// Devuelve error si el usuario ya existe.
-    pub fn _registrar_usuario(&mut self, caller: AccountId, rol: Rol) -> Result<(), ErrorRegistrarUsuario>  {
+    pub fn _registrar_usuario(&mut self, caller: AccountId, rol: RolDeSeleccion) -> Result<(), ErrorRegistrarUsuario>  {
         // el usuario no puede ya existir
         if self.usuarios.contains(caller) {
             return Err(ErrorRegistrarUsuario::UsuarioYaExiste)
         }
+
+        let rol = match rol {
+            RolDeSeleccion::Comprador => Rol::Comprador(DataComprador::default()),
+            RolDeSeleccion::Vendedor => Rol::Vendedor(DataVendedor::default()),
+            RolDeSeleccion::Ambos => Rol::Ambos(DataComprador::default(), DataVendedor::default())
+        };
 
         let usuario = Usuario::new(caller, rol);
         self.usuarios.insert(caller, &usuario); // por algún motivo es un préstamo, se supone que se clona.
@@ -479,11 +497,11 @@ mod tests {
         let cuenta = AccountId::from([0x1; 32]);
 
         // Registro exitoso
-        let resultado = contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default()));
+        let resultado = contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador);
         assert_eq!(resultado, Ok(()));
 
         // Fallo por registrar el mismo usuario
-        let resultado_repetido = contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default()));
+        let resultado_repetido = contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor);
         assert_eq!(resultado_repetido, Err(ErrorRegistrarUsuario::UsuarioYaExiste));
     }
 
@@ -497,7 +515,7 @@ mod tests {
         assert_eq!(resultado_inexistente, Err(ErrorAscenderRolUsuario::UsuarioInexistente));
 
         // Registrar usuario como Comprador
-        let _ = contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default()));
+        let _ = contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador);
 
         // Asciende correctamente a Ambos
         let resultado_ascenso = contrato._ascender_rol_usuario(cuenta);
@@ -514,7 +532,7 @@ mod tests {
         let cuenta = AccountId::from([0x7; 32]);
 
         // Registrar como comprador
-        assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
 
         // Ascender una vez (Comprador -> Ambos)
         assert!(contrato._ascender_rol_usuario(cuenta).is_ok());
@@ -544,13 +562,13 @@ mod tests {
 
         // Primer registro debe funcionar
         assert_eq!(
-            contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())),
+            contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador),
             Ok(())
         );
 
         // Segundo intento debe fallar
         assert_eq!(
-            contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())),
+            contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador),
             Err(ErrorRegistrarUsuario::UsuarioYaExiste)
         );
     }
@@ -561,7 +579,7 @@ mod tests {
         let cuenta = AccountId::from([0x10; 32]);
 
         // Registrar como comprador
-        assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
 
         // Agregar compra
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
@@ -581,7 +599,7 @@ mod tests {
         let cuenta = AccountId::from([0x11; 32]);
 
         // Registrar usuario vendedor
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         // Agregar venta
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
@@ -601,7 +619,7 @@ mod tests {
         let cuenta = AccountId::from([0x12; 32]);
 
         // Registrar usuario vendedor
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         // Agregar publicacion
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
@@ -621,7 +639,7 @@ mod tests {
         let cuenta = AccountId::from([0x13; 32]);
 
         // Registrar usuario vendedor
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         // Establecer stock producto
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
@@ -643,7 +661,7 @@ mod tests {
         let cuenta = AccountId::from([0x14; 32]);
 
         // Registrar comprador
-        assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
 
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
             assert!(usuario.calificar_como_comprador(5));
@@ -664,7 +682,7 @@ mod tests {
         let cuenta = AccountId::from([0x15; 32]);
 
         // Registrar comprador
-        assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
 
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
             // Calificacion invalida (0)
@@ -680,7 +698,7 @@ mod tests {
         let cuenta = AccountId::from([0x16; 32]);
 
         // Registrar vendedor
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
             assert!(usuario.calificar_como_vendedor(4));
@@ -701,7 +719,7 @@ mod tests {
         let cuenta = AccountId::from([0x17; 32]);
 
         // Registrar vendedor
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
             // Calificacion invalida (0)
@@ -964,7 +982,7 @@ mod tests {
         let mut contrato = RustaceoLibre::default();
         let cuenta = AccountId::from([0x34; 32]);
 
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
             usuario.establecer_stock_producto(&123, &10);
@@ -984,7 +1002,7 @@ mod tests {
         let mut contrato = RustaceoLibre::default();
         let cuenta = AccountId::from([0x35; 32]);
 
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         let resultado = contrato._ascender_rol_usuario(cuenta);
         assert_eq!(resultado, Ok(()));
@@ -1001,7 +1019,7 @@ mod tests {
         let cuenta = AccountId::from([0x32; 32]);
 
         // Registrar como vendedor
-        assert!(contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default())).is_ok());
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         // Asciende a Ambos
         let resultado = contrato._ascender_rol_usuario(cuenta);
@@ -1281,8 +1299,8 @@ mod tests {
         let mut contrato = RustaceoLibre::default();
         let cuenta = AccountId::from([0x95; 32]);
 
-        assert!(contrato._registrar_usuario(cuenta, Rol::Comprador(DataComprador::default())).is_ok());
-        let resultado = contrato._registrar_usuario(cuenta, Rol::Vendedor(DataVendedor::default()));
+        assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
+        let resultado = contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor);
         assert!(resultado.is_err());
     }
 

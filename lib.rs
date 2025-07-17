@@ -17,7 +17,11 @@ mod rustaceo_libre {
     //
 
     use crate::structs::usuario::{
-        ErrorAscenderRolUsuario, ErrorRegistrarUsuario, Rol, StockProductos, Usuario
+        Usuario,
+        StockProductos,
+        RolDeSeleccion,
+        ErrorAscenderRolUsuario,
+        ErrorRegistrarUsuario,
     };
 
     use crate::structs::producto::{
@@ -105,7 +109,7 @@ mod rustaceo_libre {
         /// 
         /// Devuelve error si el usuario ya existe.
         #[ink(message)]
-        pub fn registrar_usuario(&mut self, rol: Rol) -> Result<(), ErrorRegistrarUsuario>  {
+        pub fn registrar_usuario(&mut self, rol: RolDeSeleccion) -> Result<(), ErrorRegistrarUsuario>  {
             self._registrar_usuario(self.env().caller(), rol)
         }
 
