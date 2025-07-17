@@ -2583,6 +2583,132 @@ fn calificar_transaccion_vendedor_exitoso() {
     let compra_actualizada = contrato.compras.get(&id_compra).unwrap();
     assert_eq!(compra_actualizada.calificacion_comprador, Some(4));
 }
+    #[ink::test]
+    fn calificar_transaccion_compra_cancelada() {
+        let mut contrato = RustaceoLibre::new();
+        let comprador = AccountId::from([0x01; 32]);
+        let vendedor = AccountId::from([0x02; 32]);
+        let id_compra = 60;
+
+        contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+        contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+
+        contrato.compras.insert(id_compra, Compra {
+            id: id_compra,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoCompra::Cancelado(9999),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        let resultado = contrato._calificar_transaccion(comprador, id_compra, 5);
+        assert_eq!(resultado, Err(ErrorCalificarTransaccion::CompraNoRecibida));
+    }
+
+    #[ink::test]
+fn reclamar_fondos_timestamp_invalido() {
+    let mut contrato = RustaceoLibre::new();
+    let vendedor = AccountId::from([0x01; 32]);
+    let comprador = AccountId::from([0x02; 32]);
+    let id_compra = 999;
+
+    contrato._registrar_usuario(vendedor, Rol::Vendedor(Default::default())).unwrap();
+    contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+    let timestamp_despacho = 1000;
+    let timestamp_llamado = 500; // menor que el de despacho → causará None en `checked_sub`
+
+    contrato.compras.insert(id_compra, Compra {
+        id: id_compra,
+        timestamp: 0,
+        publicacion: 1,
+        cantidad_comprada: 1,
+        valor_total: 1000,
+        fondos_fueron_transferidos: false,
+        estado: EstadoCompra::Despachado(timestamp_despacho),
+        comprador,
+        vendedor,
+        calificacion_comprador: None,
+        calificacion_vendedor: None,
+        primer_solicitud_cancelacion: None,
+    });
+
+    let resultado = contrato._reclamar_fondos(timestamp_llamado, vendedor, id_compra);
+    assert_eq!(resultado, Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo));
+}
+#[ink::test]
+fn compra_recibida_sin_compras_registradas() {
+    let mut contrato = RustaceoLibre::new();
+    let comprador = AccountId::from([0x01; 32]);
+
+    contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+    // No agregar compras
+
+    let res = contrato._compra_recibida(1000, comprador, 1234);
+    assert_eq!(res, Err(ErrorCompraRecibida::CompraInexistente));
+}
+#[ink::test]
+fn compra_recibida_id_no_en_lista_usuario() {
+    let mut contrato = RustaceoLibre::new();
+    let comprador = AccountId::from([0x01; 32]);
+    let id_compra = 1;
+
+    contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+    // Usuario con otra compra
+    {
+        let mut usuario = contrato.usuarios.get(comprador).unwrap();
+        usuario.agregar_compra(9999); // No es 1
+        contrato.usuarios.insert(comprador, &usuario);
+    }
+
+    // Compra con id 1 sí existe, pero no asociada al usuario
+    contrato.compras.insert(id_compra, Compra {
+        id: id_compra,
+        timestamp: 0,
+        publicacion: 1,
+        cantidad_comprada: 1,
+        valor_total: 500,
+        fondos_fueron_transferidos: false,
+        estado: EstadoCompra::Despachado(0),
+        comprador,
+        vendedor: AccountId::from([0x02; 32]),
+        calificacion_comprador: None,
+        calificacion_vendedor: None,
+        primer_solicitud_cancelacion: None,
+    });
+
+    let res = contrato._compra_recibida(2000, comprador, id_compra);
+    assert_eq!(res, Err(ErrorCompraRecibida::CompraInexistente));
+}
+#[ink::test]
+fn compra_recibida_compra_inexistente_en_storage() {
+    let mut contrato = RustaceoLibre::new();
+    let comprador = AccountId::from([0x01; 32]);
+    let id_compra = 1;
+
+    contrato._registrar_usuario(comprador, Rol::Comprador(Default::default())).unwrap();
+
+    {
+        let mut usuario = contrato.usuarios.get(comprador).unwrap();
+        usuario.agregar_compra(id_compra); // Está asociada
+        contrato.usuarios.insert(comprador, &usuario);
+    }
+
+    // Pero NO insertamos la compra
+
+    let res = contrato._compra_recibida(2000, comprador, id_compra);
+    assert_eq!(res, Err(ErrorCompraRecibida::CompraInexistente));
+}
+
 
 
 }
