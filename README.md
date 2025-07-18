@@ -71,9 +71,9 @@ Primero lo primero, deshacerse de Rust:
   rustup self uninstall
 ```
 
-Seguido de volver a instalarlos desde la página oficial: https://rustup.rs
+Seguido de volver a instalarlo desde la página oficial: https://rustup.rs
 
-Instalar toolchain nightly-2025-06-20:
+Instalar toolchain nightly-2024-06-20:
 
 ```bash
   rustup component add rust-src --toolchain nightly-2024-06-20
