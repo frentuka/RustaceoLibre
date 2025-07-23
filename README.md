@@ -38,22 +38,22 @@ Cuando un vendedor realiza una publicación, este debe brindar información como
 
 Cuando el vendedor asigna cantidad a ofertar a una publicación, esta cantidad se descuenta del stock personal del vendedor. El vendedor puede, posterior a crear la publicación, administrar el stock de la misma asignando siempre desde su stock personal. No podrá asignar stock si no cuenta con la cantidad suficiente en su inventario personal para hacerlo ni podrá retirar stock de la publicación si esta no tiene la cantidad suficiente para hacerlo.
 
-> Los compradores pueden acceder a la información de cualquier publicación si conocen su ID o al listado de publicaciones de cualquier vendedor si conocen su ID.
+> Los compradores pueden acceder a la información de cualquier publicación si conocen su ID o al listado de publicaciones de cualquier vendedor si conocen la ID del mismo.
 
 ## Pedido
 
 Los compradores pueden realizar pedidos a una publicación siempre en cuanto la misma tenga el stock suficiente para realizar el pedido y el comprador haya transferido los fondos suficientes para realizar la misma.
 
-Si el comprador no transifirió los fondos suficientes de la publicación la operación no será exitosa y se le devolverán los fondos. Si transfirió de más, se le devolverá la cantidad correspondiente. Este Marketplace no cobra impuestos de ningún tipo.
+Si el comprador no transifirió los fondos suficientes de la publicación la operación no será exitosa y se le devolverán los fondos. Si transfirió de más, se le devolverá la cantidad sobrante. Este Marketplace no cobra impuestos de ningún tipo.
 
 > Los vendedores no reciben el dinero inmediatamente luego de la creación del pedido, el mismo queda almacenado en la cuenta del contrato hasta que el pedido se considere finalizado.
 
 ### Estados de un pedido
 
-- **Pendiente:** Es el estado por defecto de cualquier pedido luego de su exitosa creación. Significa que el pedido está pendiente de despacharse por parte del vendedor y solo el mismo puede marcar el pedido como despachado.
+- **Pendiente:** Es el estado por defecto de cualquier pedido luego de su exitosa creación. Significa que el pedido está pendiente de despacharse por parte del vendedor y solo él puede marcar el pedido como despachado. _El comprador puede cancelar un pedido de forma unánime si éste no fue despachado 14 días después de su creación, a esto se le llama política de cancelación unánime._
 - **Despachado:** El vendedor marcó el pedido como despachado y depende de que el usuario lo marque como recibido. El comprador tiene 60 dias para hacer esto. En caso contrario, el vendedor podría ejecutar la Cláusula de Reclamo de Fondos del pedido, _lo cual le enviará la totalidad de los fondos del pedido al vendedor_.
-- **Recibido:** El comprador marcó este pedido como recibido y la operación se considera finalizada, ya no puede sufrir cambios y _la totalidad de los fondos involucrados se transfirieron al vendedor_.
-- **Cancelado:** La cancelación de un pedido requiere de que ambas partes (comprador y vendedor) presten voluntad para hacerlo. No puede cancelarse un pedido ya cancelado o recibido. En caso de cancelarse un pedido, _todos los fondos involucrados se transfieren al comprador_ y la operación se considera finalizada.
+- **Recibido:** El comprador marcó este pedido como recibido y la operación se considera finalizada. Ya no puede sufrir cambios y _la totalidad de los fondos involucrados se transfirieron al vendedor_.
+- **Cancelado:** La cancelación de un pedido que no cumple con _la política de cancelación unánime_ requiere de que ambas partes (comprador y vendedor) presten voluntad para hacerlo. No puede cancelarse un pedido ya cancelado o recibido. En caso de cancelarse un pedido, _todos los fondos involucrados se transfieren al comprador_ y la operación se considera finalizada.
 
 ### Calificación de un pedido
 

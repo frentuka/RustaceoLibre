@@ -67,6 +67,29 @@ impl Pedido {
     }
 }
 
+/// Verifica si se cumplen todas las políticas para la cancelación unilateral de un pedido.
+/// Devuelve true en caso de cumplirse, false en caso contrario.
+fn politica_cancelacion_unilateral(timestamp: u64, pedido: &Pedido, caller: AccountId) -> bool {
+    if pedido.comprador != caller {
+        return false;
+    }
+    
+    let EstadoPedido::Pendiente(pendiente_timestamp) = pedido.estado
+    else { return false; };
+
+    let Some(tiempo_transcurrido) = timestamp.checked_sub(pendiente_timestamp)
+    else { return false; };
+
+    // 1000 * 60 * 60 * 24 * 14
+    let milis_14_dias: u64 = 1_209_600_000;
+
+    if tiempo_transcurrido < milis_14_dias {
+        return true;
+    }
+
+    true
+}
+
 //
 // impl pedido -> RustaceoLibre
 //
@@ -543,11 +566,15 @@ impl RustaceoLibre {
     /// y si éste no fue recibida ni ya cancelada.
     /// Entrega automáticamente los fondos de la compra al comprador y el stock al vendedor.
     /// 
+    /// Política de cancelación unilateral:
+    ///   Si el pedido fue realizado hace más de 14 días y aún no fue despachado,
+    ///   el comprador puede cancelar el mismo de forma unánime y recuperar los fondos.
+    /// 
     /// Devuelve error si el usuario o pedido no existen, si el usuario no participa en el pedido,
     /// si el pedido ya fue cancelado o recibido y si quien solicita la cancelación ya la solicitó antes.
     pub fn _cancelar_pedido(&mut self, timestamp: u64, caller: AccountId, id_pedido: u128) -> Result<Option<(AccountId, u128)>, ErrorCancelarPedido> {
         // validar usuario
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(_) = self.usuarios.get(caller)
         else { return Err(ErrorCancelarPedido::UsuarioNoRegistrado); };
 
         // validar compra #2
@@ -564,6 +591,33 @@ impl RustaceoLibre {
             EstadoPedido::Pendiente(_) | EstadoPedido::Despachado(_) => (),
             EstadoPedido::Recibido(_) => return Err(ErrorCancelarPedido::PedidoYaRecibido),
             EstadoPedido::Cancelado(_) => return Err(ErrorCancelarPedido::PedidoYaCancelado),
+        }
+
+        // política de cancelación unilateral
+        //    para este caso, las verificaciones de existencia de solicitud de cancelacion
+        //    o la mutualidad no son necesarias
+        if politica_cancelacion_unilateral(timestamp, pedido, caller) {
+            // modificar publicación: devolver stock
+            if let Some(mut publicacion) = self.publicaciones.get(&pedido.publicacion).cloned() {
+                if let Some(nueva_cantidad_ofertada) = publicacion.cantidad_ofertada.checked_add(pedido.cantidad_comprada) {
+                    // modificar e insertar publicación con nueva cantidad ofertada
+                    publicacion.cantidad_ofertada = nueva_cantidad_ofertada;
+                    self.publicaciones.insert(pedido.publicacion, publicacion);
+                }
+            }
+
+            let mut pedido = pedido.clone();
+
+            let id_comprador = pedido.comprador;
+            let valor_pedido = pedido.valor_total;
+
+            // modificar compra
+            pedido.estado = EstadoPedido::Cancelado(timestamp);
+            pedido.fondos_fueron_transferidos = true;
+            self.pedidos.insert(pedido.id, pedido);
+
+            // fin. se devolverán fondos en lib.rs
+            return Ok(Some((id_comprador, valor_pedido)))
         }
     
         //
@@ -737,7 +791,7 @@ mod tests {
     use super::*;
     use crate::structs::{
         producto::CategoriaProducto,
-        usuario::{Rol, RolDeSeleccion},
+        usuario::{RolDeSeleccion},
     };
     use ink::primitives::AccountId;
 
