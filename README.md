@@ -22,9 +22,9 @@ A partir de ahora se referirá como "compradores" a los usuarios que se hayan re
 
 ### Calificaciones
 
-Tanto los compradores como los vendedores tienen una calificación brindada por sus contrapartes en sus pedidos realizados. Si un usuario es comprador y vendedor, tendrá dos calificaciones: una como comprador y otra como vendedor.
+Tanto los compradores como los vendedores tienen una calificación brindada por sus contrapartes en sus pedidos realizados. Si un usuario está registrado como comprador y vendedor a la vez, tendrá dos calificaciones: una como comprador y otra como vendedor.
 
-> Las clasificaciones de otros usuarios son públicas para todo aquel que esté registrado en el marketplace.
+> Las calificaciones de otros usuarios son públicas para todo aquel que esté registrado en el marketplace.
 
 ## Productos
 
