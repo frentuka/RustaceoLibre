@@ -249,9 +249,9 @@ impl RustaceoLibre {
 #[cfg(test)]
 mod tests {
 
-        use super::*;
-        use crate::structs::usuario::{Rol, RolDeSeleccion};
-        use crate::structs::producto::{CategoriaProducto, Producto};
+    use super::*;
+    use crate::structs::usuario::{RolDeSeleccion};
+    use crate::structs::producto::{CategoriaProducto, Producto};
     
     //
     // registrar producto
@@ -263,7 +263,7 @@ mod tests {
         let vendedor = accounts.alice;
         
         // Crear contrato
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Simular llamado como Alice
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
@@ -342,7 +342,7 @@ mod tests {
         let vendedor = accounts.alice;
 
         // Crear contrato
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Registrar a Alice como Vendedor
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
@@ -361,7 +361,7 @@ mod tests {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let vendedor = accounts.alice;
 
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // crear y registrar prod pero NO registrar usuario
         let producto = Producto {
@@ -381,7 +381,7 @@ mod tests {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let comprador = accounts.bob;
 
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         let rol = RolDeSeleccion::Comprador;
         assert_eq!(contrato._registrar_usuario(comprador, rol), Ok(()));
@@ -404,7 +404,7 @@ mod tests {
         let vendedor = accounts.alice;
 
     
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Registrar a Alice como Vendedor
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
@@ -434,7 +434,7 @@ mod tests {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let vendedor = accounts.alice;
 
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
 
         // Registrar a Alice como Vendedor
@@ -463,7 +463,7 @@ mod tests {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let vendedor = accounts.alice;
 
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
         let rol = RolDeSeleccion::Vendedor;
         assert_eq!(contrato.registrar_usuario(rol), Ok(()));
@@ -488,7 +488,7 @@ mod tests {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let comprador = accounts.bob;
 
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Registrar a Bob como Comprador
         let rol = RolDeSeleccion::Comprador;
@@ -513,7 +513,7 @@ mod tests {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let vendedor = accounts.alice;
 
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Crear y registrar producto, pero NO registrar usuario
         let producto = Producto {
@@ -534,7 +534,7 @@ mod tests {
         let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
         let vendedor = accounts.alice;
         
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         let producto = Producto {
             nombre: "asd".to_string(),

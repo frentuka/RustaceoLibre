@@ -284,7 +284,7 @@ mod tests {
 
     #[ink::test]
     fn test_realizar_publicacion_precio_cero() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -302,7 +302,7 @@ mod tests {
 
     #[ink::test]
     fn test_realizar_publicacion_cantidad_cero() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -320,7 +320,7 @@ mod tests {
 
     #[ink::test]
     fn test_realizar_publicacion_usuario_no_registrado() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 100);
@@ -329,7 +329,7 @@ mod tests {
 
     #[ink::test]
     fn test_realizar_publicacion_no_es_vendedor() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
             compras: Vec::new(),
@@ -344,7 +344,7 @@ mod tests {
 
     #[ink::test]
     fn test_realizar_publicacion_stock_insuficiente() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -363,7 +363,7 @@ mod tests {
 
     #[ink::test]
     fn test_realizar_publicacion_producto_inexistente() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -381,7 +381,7 @@ mod tests {
 
     #[ink::test]
     fn test_realizar_publicacion_success() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -410,7 +410,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_usuario_inexistente() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
 
         let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15);
@@ -419,7 +419,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_no_es_vendedor() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
             compras: Vec::new(),
@@ -434,7 +434,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_publicacion_inexistente() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -451,7 +451,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_no_es_el_vendedor() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let otro_vendedor = AccountId::from([0x2; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
@@ -471,7 +471,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_sin_cambios() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -491,7 +491,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_success_increase() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -517,7 +517,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_success_decrease() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -543,7 +543,7 @@ mod tests {
 
     #[ink::test]
     fn test_modificar_cantidad_ofertada_stock_vendedor_insuficiente() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -569,7 +569,7 @@ mod tests {
 
     #[ink::test]
     fn test_ver_publicacion_usuario_no_registrado() {
-        let rustaceo = RustaceoLibre::new();
+        let rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
 
         let result = rustaceo._ver_publicacion(caller, 0);
@@ -578,7 +578,7 @@ mod tests {
 
     #[ink::test]
     fn test_ver_publicacion_publicacion_inexistente() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -595,7 +595,7 @@ mod tests {
 
     #[ink::test]
     fn test_ver_publicaciones_vendedor_usuario_no_registrado() {
-        let rustaceo = RustaceoLibre::new();
+        let rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
 
         let result = rustaceo._ver_publicaciones_vendedor(caller);
@@ -604,7 +604,7 @@ mod tests {
 
     #[ink::test]
     fn test_ver_publicaciones_vendedor_no_es_vendedor() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
             compras: Vec::new(),
@@ -619,7 +619,7 @@ mod tests {
     
     #[ink::test]
     fn test_ver_publicaciones_vendedor_no_tiene_publicaciones() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
@@ -636,7 +636,7 @@ mod tests {
 
     #[ink::test]
     fn test_ver_publicaciones_vendedor_success() {
-        let mut rustaceo = RustaceoLibre::new();
+        let mut rustaceo = RustaceoLibre::new(0);
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),

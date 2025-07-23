@@ -2,11 +2,13 @@
   <img src="https://github.com/frentuka/RustaceoLibre/blob/master/logo.png" />
 </p>
 
+Trabajo práctico final de la materia Seminario de Lenguajes: Rust.
+
 # Rustaceo Libre: Estructura
 
 Rustaceo Libre es un marketplace «al estilo Mercado Libre» desarrollado en Ink!
 
-Despliegue del contrato: aaUgbgCYnjHr6MVU2rNNnrp37zLM5jyZmpkUeXr48Zrvccx
+Despliegue del contrato (2025-07-17): aaUgbgCYnjHr6MVU2rNNnrp37zLM5jyZmpkUeXr48Zrvccx 
 
 Esta es una descripción de la estructura del sistema, implementando todo lo solicitado por el enunciado y agregando o reimaginando algunas funcionalidades
 
@@ -34,7 +36,7 @@ Todos los vendedores pueden utilizar todos los productos siempre que hayan ingre
 
 ## Publicación
 
-Cuando un vendedor realiza una publicación, este debe brindar información como el producto, la cantidad a ofertar y el precio unitario.
+Cuando un vendedor realiza una publicación, este debe brindar información como la ID del producto, la cantidad a ofertar y el precio unitario.
 
 Cuando el vendedor asigna cantidad a ofertar a una publicación, esta cantidad se descuenta del stock personal del vendedor. El vendedor puede, posterior a crear la publicación, administrar el stock de la misma asignando siempre desde su stock personal. No podrá asignar stock si no cuenta con la cantidad suficiente en su inventario personal para hacerlo ni podrá retirar stock de la publicación si esta no tiene la cantidad suficiente para hacerlo.
 
@@ -45,6 +47,8 @@ Cuando el vendedor asigna cantidad a ofertar a una publicación, esta cantidad s
 Los compradores pueden realizar pedidos a una publicación siempre en cuanto la misma tenga el stock suficiente para realizar el pedido y el comprador haya transferido los fondos suficientes para realizar la misma.
 
 Si el comprador no transifirió los fondos suficientes de la publicación la operación no será exitosa y se le devolverán los fondos. Si transfirió de más, se le devolverá la cantidad sobrante. Este Marketplace no cobra impuestos de ningún tipo.
+
+Al concretarse una venta, ya sea porque el comprador la recibió o porque el vendedor hizo uso de la política de reclamo de fondos, se descontará (si existe) una tarifa de servicio que puede indicarse al momento de desplegar el contrato. Por defecto, esta tarifa es 0%.
 
 > Los vendedores no reciben el dinero inmediatamente luego de la creación del pedido, el mismo queda almacenado en la cuenta del contrato hasta que el pedido se considere finalizado.
 

@@ -69,6 +69,8 @@ mod rustaceo_libre {
         productos_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para las publicaciones.
         publicaciones_siguiente_id: u128,
+        /// total de la tarifa: total_compra * tarifa_de_servicio / 1_000
+        tarifa_de_servicio: u128,
         /// ID del dueño del contrato
         pub owner: AccountId,
     }
@@ -77,18 +79,19 @@ mod rustaceo_libre {
     impl RustaceoLibre {
         /// Construye un nuevo contrato con sus valores por defecto
         #[ink(constructor)]
-        pub fn new() -> Self {
-            Self::_new()
+        pub fn new(tarifa_de_servicio: u128) -> Self {
+            Self::_new(tarifa_de_servicio)
         }
 
         /// Constructor por defecto (Ídem new())
+        /// La tarifa de servicio por defecto es 0
         #[ink(constructor)]
         pub fn default() -> Self {
-            Self::_new()
+            Self::_new(0)
         }
 
         /// Crea una nueva instancia de RustaceoLibre
-        fn _new() -> Self {
+        fn _new(tarifa_de_servicio: u128) -> Self {
             Self {
                 usuarios: Default::default(),
                 pedidos: Default::default(),
@@ -97,6 +100,7 @@ mod rustaceo_libre {
                 pedidos_siguiente_id: 0,
                 productos_siguiente_id: 0,
                 publicaciones_siguiente_id: 0,
+                tarifa_de_servicio,
                 owner: Self::env().caller(),
             }
         }
@@ -212,6 +216,21 @@ mod rustaceo_libre {
         // pedido.rs: administrar compras    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
 
+        #[ink(message)]
+        pub fn calcular_tarifa_de_servicio(&self, valor_compra: u128) -> u128 {
+            self._calcular_tarifa_de_servicio(valor_compra)
+        }
+
+        fn _calcular_tarifa_de_servicio(&self, valor_compra: u128) -> u128 {
+            let Some(tarifa_servicio) = valor_compra.checked_div(1000)
+            else { return 0; };
+
+            let Some(tarifa_servicio) = tarifa_servicio.checked_mul(self.tarifa_de_servicio)
+            else { return 0; };
+
+            tarifa_servicio
+        }
+
         /// Compra una cantidad de un producto
         /// 
         /// Puede dar error si el usuario no existe, no es comprador, la publicación no existe,
@@ -249,7 +268,14 @@ mod rustaceo_libre {
             let Ok(valor) = operacion
             else { return operacion };
 
-            let _ = self.env().transfer(self.env().caller(), valor);
+            let tarifa_servicio = self._calcular_tarifa_de_servicio(valor);
+            let Some(valor_final) = valor.checked_sub(tarifa_servicio)
+            else { 
+                let _ = self.env().transfer(self.env().caller(), valor);
+                return operacion;
+            };
+
+            let _ = self.env().transfer(self.env().caller(), valor_final);
 
             operacion
         }
@@ -265,6 +291,7 @@ mod rustaceo_libre {
         }
         
         /// Si el pedido indicado fue despachado y el usuario es el comprador, se establece como recibido.
+        /// El comprador recibirá los fondos descontando una tarifa por el servicio.
         /// 
         /// Puede dar error si el usuario no está registrado, la compra no existe,
         /// la compra no fue despachada, ya fue recibida, no es el comprador quien intenta recibirlo
@@ -276,7 +303,17 @@ mod rustaceo_libre {
             let Ok((vendedor, valor)) = operacion
             else { return Err(operacion.unwrap_err()) };
 
-            let _ = self.env().transfer(vendedor, valor);
+            // descontar tarifa de servicio
+            let tarifa_servicio = self._calcular_tarifa_de_servicio(valor);
+
+            let Some(valor_final) = valor.checked_sub(tarifa_servicio)
+            else {
+                // desestimar tarifa de servicio por error al calcularla
+                let _ = self.env().transfer(vendedor, valor);
+                return Ok(());
+            };
+
+            let _ = self.env().transfer(vendedor, valor_final);
 
             Ok(())
         }
@@ -448,8 +485,9 @@ mod rustaceo_libre {
 
         #[ink::test]
         fn new_works() {
-            let rustaceo_libre = RustaceoLibre::new();
+            let rustaceo_libre = RustaceoLibre::new(1000);
             assert_eq!(rustaceo_libre.pedidos_siguiente_id, 0);
+            assert_eq!(rustaceo_libre._calcular_tarifa_de_servicio(1000), 1000);
         }
 
         /// We test if the default constructor does its job.
@@ -462,7 +500,8 @@ mod rustaceo_libre {
         /// We test a simple use case of our contract.
         #[ink::test]
         fn next_id_works() {
-            let mut rustaceo_libre = RustaceoLibre::new();
+            let mut rustaceo_libre = RustaceoLibre::new(0);
+
             assert_eq!(rustaceo_libre.next_id_pedidos(), 0);
             assert_eq!(rustaceo_libre.next_id_pedidos(), 1);
             assert_eq!(rustaceo_libre.next_id_productos(), 0);

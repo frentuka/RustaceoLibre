@@ -1031,7 +1031,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_exitoso() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Simulación de cuentas
         let vendedor = AccountId::from([0x01; 32]);
@@ -1078,7 +1078,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_usuario_no_registrado() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Crear ID de compra válido y simular una compra
         let comprador = AccountId::from([0x02; 32]);
@@ -1118,7 +1118,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_compra_no_existe() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let timestamp_actual = 6_184_000_000;
         let id_compra_inexistente = 999;
@@ -1139,7 +1139,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_no_es_el_vendedor() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor_real = AccountId::from([0x02; 32]);
         let caller_falso = comprador; // el que intenta reclamar sin ser el vendedor
@@ -1179,7 +1179,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_ya_transferidos() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1219,7 +1219,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_estado_incorrecto() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1258,7 +1258,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_antes_de_tiempo() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1297,7 +1297,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_no_es_vendedor() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let otro_usuario = AccountId::from([0x03; 32]); // no es vendedor
         let comprador = AccountId::from([0x01; 32]);
@@ -1338,7 +1338,7 @@ mod tests {
     #[ink::test]
     fn reclamar_fondos_fondos_ya_transferidos() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1375,7 +1375,7 @@ mod tests {
 
     #[ink::test]
     fn reclamar_fondos_no_convalida_politica() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1409,7 +1409,7 @@ mod tests {
     #[ink::test]
     fn compra_despachada_exitoso() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Crear cuentas
         let vendedor = AccountId::from([0x01; 32]);
@@ -1471,7 +1471,7 @@ mod tests {
 
     #[ink::test]
     fn compra_despachada_usuario_no_registrado() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
 
@@ -1501,7 +1501,7 @@ mod tests {
 
     #[ink::test]
     fn compra_despachada_compra_inexistente() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         let vendedor = AccountId::from([0x01; 32]);
         contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
@@ -1514,7 +1514,7 @@ mod tests {
     #[ink::test]
     fn compra_recibida_exitoso() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Crear cuentas
         let vendedor = AccountId::from([0x01; 32]);
@@ -1578,7 +1578,7 @@ mod tests {
     #[ink::test]
     fn cancelar_compra_exitoso() {
         // Arrange
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
 
         // Crear cuentas
         let vendedor = AccountId::from([0x01; 32]);
@@ -1640,7 +1640,7 @@ mod tests {
 
     #[ink::test]
     fn reclamar_fondos_estado_recibido() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1672,7 +1672,7 @@ mod tests {
 
     #[ink::test]
     fn reclamar_fondos_estado_cancelado() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1704,7 +1704,7 @@ mod tests {
 
     #[ink::test]
     fn reclamar_fondos_estado_ya_recibido() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
@@ -1736,7 +1736,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_usuario_no_registrado() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 1;
 
@@ -1749,7 +1749,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_ya_recibida() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let vendedor = AccountId::from([0x01; 32]);
         let id_compra = 1;
@@ -1789,7 +1789,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_cancelada() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let vendedor = AccountId::from([0x01; 32]);
         let id_compra = 42;
@@ -1829,7 +1829,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_no_despachada() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let vendedor = AccountId::from([0x01; 32]);
         let id_compra = 7;
@@ -1869,7 +1869,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_solo_comprador_puede() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let vendedor = AccountId::from([0x01; 32]);
         let id_compra = 10;
@@ -1910,7 +1910,7 @@ mod tests {
 
     #[ink::test]
     fn cancelar_compra_usuario_no_registrado() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 1;
 
@@ -1923,7 +1923,7 @@ mod tests {
 
     #[ink::test]
     fn cancelar_compra_inexistente() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 999;
 
@@ -1939,7 +1939,7 @@ mod tests {
 
     #[ink::test]
     fn cancelar_compra_usuario_no_participa() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let vendedor = AccountId::from([0x01; 32]);
         let otro_usuario = AccountId::from([0x03; 32]);
@@ -1993,7 +1993,7 @@ mod tests {
 
     #[ink::test]
     fn cancelar_compra_ya_recibida() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let vendedor = AccountId::from([0x01; 32]);
         let id_compra = 555;
@@ -2040,7 +2040,7 @@ mod tests {
 
     #[ink::test]
     fn cancelar_compra_ya_cancelada() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x02; 32]);
         let vendedor = AccountId::from([0x01; 32]);
         let id_compra = 777;
@@ -2087,7 +2087,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_usuario_no_registrado() {
-        let contrato = RustaceoLibre::new();
+        let contrato = RustaceoLibre::new(0);
         let usuario = AccountId::from([0x01; 32]);
 
         let resultado = contrato._ver_compras(usuario);
@@ -2096,7 +2096,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_no_es_comprador() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como vendedor (no comprador)
@@ -2109,7 +2109,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_sin_compras() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como comprador
@@ -2124,7 +2124,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 123;
@@ -2166,7 +2166,7 @@ mod tests {
 
     #[ink::test]
     fn ver_ventas_usuario_no_registrado() {
-        let contrato = RustaceoLibre::new();
+        let contrato = RustaceoLibre::new(0);
         let usuario = AccountId::from([0x01; 32]);
 
         let resultado = contrato._ver_ventas(usuario);
@@ -2176,7 +2176,7 @@ mod tests {
 
     #[ink::test]
     fn ver_ventas_no_es_vendedor() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como comprador (no vendedor)
@@ -2189,7 +2189,7 @@ mod tests {
 
     #[ink::test]
     fn ver_ventas_sin_ventas() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let usuario = AccountId::from([0x01; 32]);
 
         // Registrar usuario como vendedor
@@ -2204,7 +2204,7 @@ mod tests {
 
     #[ink::test]
     fn ver_ventas_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 456;
@@ -2246,7 +2246,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_estado_vacio() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 1;
@@ -2288,7 +2288,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_estado_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 1;
@@ -2331,7 +2331,7 @@ mod tests {
 
     #[ink::test]
     fn ver_ventas_estado_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 1;
@@ -2374,7 +2374,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_categoria_vacio() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 1;
@@ -2426,7 +2426,7 @@ mod tests {
 
     #[ink::test]
     fn ver_compras_categoria_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 2;
@@ -2479,7 +2479,7 @@ mod tests {
 
     #[ink::test]
     fn ver_ventas_categoria_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 3;
@@ -2532,7 +2532,7 @@ mod tests {
 
     #[ink::test]
     fn ver_ventas_categoria_vacio() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 4;
@@ -2584,7 +2584,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_calificacion_invalida() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 1;
 
@@ -2602,7 +2602,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_usuario_no_registrado() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let usuario = AccountId::from([0x01; 32]);
         let id_compra = 1;
 
@@ -2615,7 +2615,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_compra_inexistente() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 999;
 
@@ -2631,7 +2631,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_compra_no_recibida() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 10;
@@ -2663,7 +2663,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_usuario_ya_califico() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 20;
@@ -2695,7 +2695,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_usuario_no_participa() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let otro_usuario = AccountId::from([0x03; 32]);
@@ -2730,7 +2730,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_vendedor_inexistente() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 40;
@@ -2763,7 +2763,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_comprador_inexistente() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 41;
@@ -2796,7 +2796,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 50;
@@ -2832,7 +2832,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_vendedor_exitoso() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 51;
@@ -2868,7 +2868,7 @@ mod tests {
 
     #[ink::test]
     fn calificar_transaccion_compra_cancelada() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let vendedor = AccountId::from([0x02; 32]);
         let id_compra = 60;
@@ -2898,7 +2898,7 @@ mod tests {
 
     #[ink::test]
     fn reclamar_fondos_timestamp_invalido() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x01; 32]);
         let comprador = AccountId::from([0x02; 32]);
         let id_compra = 999;
@@ -2931,7 +2931,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_sin_compras_registradas() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
 
         contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
@@ -2945,7 +2945,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_id_no_en_lista_usuario() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 1;
 
@@ -2981,7 +2981,7 @@ mod tests {
 
     #[ink::test]
     fn compra_recibida_compra_inexistente_en_storage() {
-        let mut contrato = RustaceoLibre::new();
+        let mut contrato = RustaceoLibre::new(0);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 1;
 
