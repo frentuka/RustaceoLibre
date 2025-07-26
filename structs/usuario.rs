@@ -29,10 +29,6 @@ impl StockProductos {
 
     /// Inserta el producto en el vector doble. Si ya existe un producto con ese valor, lo sobreescribe.
     /// Si no existe un producto con ese valor, inserta al final de la lista.
-    /// cambios aca !!!!!!!!!!!!
-    /// El método actual elimina elementos en el índice Err(index), que es incorrecto y causa pánico.
-    /// La solución es no eliminar nada en Err(index), solo insertar.
-    /// En Ok(index) actualizar el stock existente.
     pub fn insert(&mut self, id_producto: u128, stock: u32) {
     match self.productos.binary_search(&id_producto) {
         Ok(index) => {
@@ -61,6 +57,7 @@ impl StockProductos {
 )]
 pub struct DataComprador {
     pub compras: Vec<u128>,
+    pub disputas_en_curso: Vec<u128>,
     pub total_calificaciones: u64,
     pub cant_calificaciones: u32,
 }
@@ -77,6 +74,7 @@ pub struct DataComprador {
 )]
 pub struct DataVendedor {
     pub ventas: Vec<u128>,
+    pub disputas_en_curso: Vec<u128>,
     pub publicaciones: Vec<u128>,
     pub stock_productos: StockProductos,
     pub total_calificaciones: u64,
@@ -173,6 +171,12 @@ impl Usuario {
         self.obtener_data_comprador().map(|data| data.compras)
     }
 
+    /// Devuelve las disputas en las que esté involucrado el usuario como vendedor.
+    /// Devolverá None si no es vendedor.
+    pub fn obtener_disputas_en_curso_comprador(&self) -> Option<Vec<u128>> {
+        self.obtener_data_comprador().map(|data| data.disputas_en_curso)
+    }
+
     /// Devuelve el registro completo de DataVendedor del usuario.
     /// Devolverá None si no es vendedor.
     pub fn obtener_data_vendedor(&self) -> Option<DataVendedor> {
@@ -187,6 +191,12 @@ impl Usuario {
     /// Devolverá None si no es vendedor.
     pub fn obtener_ventas(&self) -> Option<Vec<u128>> {
         self.obtener_data_vendedor().map(|data| data.ventas)
+    }
+
+    /// Devuelve las disputas en las que esté involucrado el usuario como vendedor.
+    /// Devolverá None si no es vendedor.
+    pub fn obtener_disputas_en_curso_vendedor(&self) -> Option<Vec<u128>> {
+        self.obtener_data_vendedor().map(|data| data.disputas_en_curso)
     }
 
     /// Devuelve las publicaciones que haya realizado el usuario.
@@ -216,14 +226,57 @@ impl Usuario {
     /// Devolverá false si esa compra ya está añadida o el usuario no es comprador.
     /// No verifica que la compra exista.
     pub fn agregar_compra(&mut self, id_compra: u128) -> bool {
-        let Some(mut data_comprador) = self.obtener_data_comprador()
+        let Some(mut nuevo_data_comprador) = self.obtener_data_comprador()
         else { return false; };
 
-        data_comprador.compras.push(id_compra);
+        nuevo_data_comprador.compras.push(id_compra);
         let nuevo_rol = match &self.rol {
-            Rol::Comprador(_) => Rol::Comprador(data_comprador),
+            Rol::Comprador(_) => Rol::Comprador(nuevo_data_comprador),
             Rol::Vendedor(_) => return false, // no debería nunca poder pasar
-            Rol::Ambos(_, data_vendedor) => Rol::Ambos(data_comprador, data_vendedor.clone()),
+            Rol::Ambos(_, data_vendedor) => Rol::Ambos(nuevo_data_comprador, data_vendedor.clone()),
+        };
+
+        self.rol = nuevo_rol;
+        true
+    }
+
+    /// Añade una disputa al vector de disputas en curso como comprador del rol del usuario.
+    /// 
+    /// Devuelve true si la disputa pudo agregarse.
+    /// Devolverá false si esa disputa ya está añadida o el usuario no es comprador.
+    /// No verifica que la disputa exista.
+    pub fn agregar_disputa_comprador(&mut self, id_disputa: u128) -> bool {
+        let Some(mut nuevo_data_comprador) = self.obtener_data_comprador()
+        else { return false; };
+
+        nuevo_data_comprador.disputas_en_curso.push(id_disputa);
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => Rol::Comprador(nuevo_data_comprador),
+            Rol::Vendedor(_) => return false, // no debería nunca poder pasar
+            Rol::Ambos(_, data_vendedor) => Rol::Ambos(nuevo_data_comprador, data_vendedor.clone()),
+        };
+
+        self.rol = nuevo_rol;
+        true
+    }
+
+    /// Elimina una disputa del vector de disputas en curso como comprador del rol del usuario.
+    /// 
+    /// Devuelve true si la disputa pudo eliminarse.
+    /// Devolverá false si esa disputa no existe o el usuario no es comprador.
+    pub fn eliminiar_disputa_comprador(&mut self, id_disputa: u128) -> bool {
+        let Some(mut nuevo_data_comprador) = self.obtener_data_comprador()
+        else { return false; };
+
+        let Some(posicion_disputa) = nuevo_data_comprador.disputas_en_curso.iter().position(|&id| id == id_disputa)
+        else { return false; };
+
+        nuevo_data_comprador.disputas_en_curso.remove(posicion_disputa);
+
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => Rol::Comprador(nuevo_data_comprador),
+            Rol::Vendedor(_) => return false, // no debería nunca poder pasar
+            Rol::Ambos(_, data_vendedor) => Rol::Ambos(nuevo_data_comprador, data_vendedor.clone()),
         };
 
         self.rol = nuevo_rol;
@@ -244,6 +297,49 @@ impl Usuario {
             Rol::Comprador(_) => return false,
             Rol::Vendedor(_) => Rol::Vendedor(nuevo_data_vendedor), // no debería nunca poder pasar
             Rol::Ambos(compras, _) => Rol::Ambos(compras.clone(), nuevo_data_vendedor),
+        };
+
+        self.rol = nuevo_rol;
+        true
+    }
+
+    /// Añade una disputa al vector de disputas en curso como vendedor del rol del usuario.
+    /// 
+    /// Devuelve true si la disputa pudo agregarse.
+    /// Devolverá false si esa disputa ya está añadida o el usuario no es vendedor.
+    /// No verifica que la disputa exista.
+    pub fn agregar_disputa_vendedor(&mut self, id_disputa: u128) -> bool {
+        let Some(mut nuevo_data_vendedor) = self.obtener_data_vendedor()
+        else { return false; };
+
+        nuevo_data_vendedor.disputas_en_curso.push(id_disputa);
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => return false,
+            Rol::Vendedor(_) => Rol::Vendedor(nuevo_data_vendedor), // no debería nunca poder pasar
+            Rol::Ambos(data_comprador, _) => Rol::Ambos(data_comprador.clone(), nuevo_data_vendedor),
+        };
+
+        self.rol = nuevo_rol;
+        true
+    }
+
+    /// Elimina una disputa del vector de disputas en curso como vendedor del rol del usuario.
+    /// 
+    /// Devuelve true si la disputa pudo eliminarse.
+    /// Devolverá false si esa disputa no existe o el usuario no es vendedor.
+    pub fn eliminiar_disputa_vendedor(&mut self, id_disputa: u128) -> bool {
+        let Some(mut nuevo_data_vendedor) = self.obtener_data_vendedor()
+        else { return false; };
+
+        let Some(posicion_disputa) = nuevo_data_vendedor.disputas_en_curso.iter().position(|&id| id == id_disputa)
+        else { return false; };
+
+        nuevo_data_vendedor.disputas_en_curso.remove(posicion_disputa);
+
+        let nuevo_rol = match &self.rol {
+            Rol::Comprador(_) => return false,
+            Rol::Vendedor(_) => Rol::Vendedor(nuevo_data_vendedor), // no debería nunca poder pasar
+            Rol::Ambos(data_comprador, _) => Rol::Ambos(data_comprador.clone(), nuevo_data_vendedor),
         };
 
         self.rol = nuevo_rol;

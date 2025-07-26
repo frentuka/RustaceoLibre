@@ -288,6 +288,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -306,6 +307,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -333,6 +335,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
             compras: Vec::new(),
+            disputas_en_curso: Vec::new(),
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
@@ -348,6 +351,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -367,6 +371,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -385,6 +390,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -423,6 +429,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
             compras: Vec::new(),
+            disputas_en_curso: Vec::new(),
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
@@ -438,6 +445,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -456,6 +464,7 @@ mod tests {
         let otro_vendedor = AccountId::from([0x2; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -475,6 +484,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -495,6 +505,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -521,6 +532,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -547,6 +559,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let mut usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -582,6 +595,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(),
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -608,6 +622,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Comprador(DataComprador {
             compras: Vec::new(),
+            disputas_en_curso: Vec::new(),
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
@@ -623,6 +638,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: Vec::new(), // Sin publicaciones
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
@@ -640,6 +656,7 @@ mod tests {
         let caller = AccountId::from([0x1; 32]);
         let usuario = Usuario::new(caller, Rol::Vendedor(DataVendedor {
             ventas: Vec::new(),
+            disputas_en_curso: Vec::new(),
             publicaciones: vec![0], // Con una publicación
             stock_productos: StockProductos::default(),
             total_calificaciones: 0,
