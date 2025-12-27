@@ -1904,7 +1904,7 @@ mod tests {
 
         // El vendedor intenta marcar como recibida (no debe poder)
         let resultado = contrato._pedido_recibido(3000, vendedor, id_compra);
-        assert_eq!(resultado, Err(ErrorProductoRecibido::PedidoInexistente));
+        assert_eq!(resultado, Err(ErrorProductoRecibido::SoloCompradorPuede));
     }
 
 

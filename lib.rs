@@ -517,5 +517,186 @@ mod rustaceo_libre {
             assert_eq!(rustaceo_libre.next_id_productos(), 0);
             assert_eq!(rustaceo_libre.next_id_publicaciones(), 0);
         }
+
+        use ink::env::test;
+        use ink::env::DefaultEnvironment;
+
+        fn set_caller(caller: AccountId) {
+            test::set_caller::<DefaultEnvironment>(caller);
+        }
+
+        fn set_value_transferred(value: Balance) {
+            test::set_value_transferred::<DefaultEnvironment>(value);
+        }
+
+        fn set_balance(who: AccountId, amount: Balance) {
+            test::set_account_balance::<DefaultEnvironment>(who, amount);
+        }
+
+        fn balances_setup(accounts: &test::DefaultAccounts<DefaultEnvironment>) {
+            // Dar balances grandes a todos, y al contrato también para que transfers no fallen por falta de fondos.
+            set_balance(accounts.alice, 1_000_000_000_000);
+            set_balance(accounts.bob, 1_000_000_000_000);
+            set_balance(accounts.charlie, 1_000_000_000_000);
+            set_balance(accounts.django, 1_000_000_000_000);
+
+            let contract = test::callee::<DefaultEnvironment>();
+
+            set_balance(contract, 1_000_000_000_000);
+        }
+
+        /// Escenario mínimo para cubrir wrappers de lib.rs:
+        /// - alice: vendedor
+        /// - bob: comprador
+        /// - alice registra producto con stock y publica (precio y cantidad)
+        /// Devuelve (contract, accounts, id_publicacion).
+        fn setup_publicacion_basica() -> (RustaceoLibre, test::DefaultAccounts<DefaultEnvironment>, u128) {
+            let accounts = test::default_accounts::<DefaultEnvironment>();
+            balances_setup(&accounts);
+
+            set_caller(accounts.alice);
+            let mut c = RustaceoLibre::new(0);
+
+            // registrar vendedor
+            assert!(c.registrar_usuario(RolDeSeleccion::Vendedor).is_ok());
+
+            // registrar producto con stock inicial
+            let id_producto = c
+                .registrar_producto(
+                    "prod".into(),
+                    "desc".into(),
+                    CategoriaProducto::Hogar,
+                    10,
+                )
+                .expect("registrar_producto debe funcionar");
+
+            // realizar publicación: ofrece 5 unidades a precio 100
+            let id_publicacion = c
+                .realizar_publicacion(id_producto, 5, 100)
+                .expect("realizar_publicacion debe funcionar");
+
+            // registrar comprador (bob)
+            set_caller(accounts.bob);
+            assert!(c.registrar_usuario(RolDeSeleccion::Comprador).is_ok());
+
+            (c, accounts, id_publicacion)
+        }
+
+        fn comprar_1(
+            c: &mut RustaceoLibre,
+            accounts: &test::DefaultAccounts<DefaultEnvironment>,
+            id_publicacion: u128,
+            valor_transferido: Balance,
+        ) -> Result<u128, ErrorComprarProducto> {
+            set_caller(accounts.bob);
+            set_value_transferred(valor_transferido);
+            c.comprar_producto(id_publicacion, 1)
+        }
+
+        #[ink::test]
+        fn comprar_producto_err_cubre_rama_devolucion_total() {
+            let (mut c, accounts, id_publicacion) = setup_publicacion_basica();
+
+            // Forzamos error del wrapper: cantidad 0 => CantidadCero.
+            // Además seteamos value_transferred para ejecutar la línea del transfer de devolución total.
+            set_caller(accounts.bob);
+            set_value_transferred(500);
+
+            let res = c.comprar_producto(id_publicacion, 0);
+            assert!(matches!(res, Err(ErrorComprarProducto::CantidadCero)));
+        }
+
+        #[ink::test]
+        fn comprar_producto_ok_sin_sobrante_cubre_rama_ok() {
+            let (mut c, accounts, id_publicacion) = setup_publicacion_basica();
+
+            // precio unitario=100, cantidad=1 => transfer exacto: 100 => sobrante 0 (no entra al if)
+            let id_pedido = comprar_1(&mut c, &accounts, id_publicacion, 100)
+                .expect("compra ok");
+
+            assert!(c.pedidos.contains_key(&id_pedido));
+        }
+
+        #[ink::test]
+        fn comprar_producto_ok_con_sobrante_cubre_devolucion_sobrante() {
+            let (mut c, accounts, id_publicacion) = setup_publicacion_basica();
+
+            // total=100, transferimos 150 => sobrante 50 (cubre if monto_transferido_sobrante > 0)
+            let id_pedido = comprar_1(&mut c, &accounts, id_publicacion, 150)
+                .expect("compra ok con sobrante");
+
+            assert!(c.pedidos.contains_key(&id_pedido));
+        }
+
+        #[ink::test]
+        fn flujo_pendiente_despachado_recibido_via_messages() {
+            let (mut c, accounts, id_publicacion) = setup_publicacion_basica();
+
+            // comprar (crea pedido pendiente)
+            let id_pedido = comprar_1(&mut c, &accounts, id_publicacion, 100)
+                .expect("compra ok");
+
+            // despachar por vendedor (message wrapper)
+            set_caller(accounts.alice);
+            assert!(c.pedido_despachado(id_pedido).is_ok());
+
+            // recibir por comprador (message wrapper con transfer)
+            set_caller(accounts.bob);
+            assert!(c.pedido_recibido(id_pedido).is_ok());
+        }
+
+        #[ink::test]
+        fn pedido_recibido_wrapper_err_solo_comprador_puede() {
+            let (mut c, accounts, id_publicacion) = setup_publicacion_basica();
+
+            let id_pedido = comprar_1(&mut c, &accounts, id_publicacion, 100)
+                .expect("compra ok");
+
+            set_caller(accounts.alice);
+            assert!(c.pedido_despachado(id_pedido).is_ok());
+
+            // Intentar recibir con el vendedor: debe fallar con SoloCompradorPuede (punto [14])
+            set_caller(accounts.alice);
+            let res = c.pedido_recibido(id_pedido);
+            assert!(matches!(res, Err(ErrorProductoRecibido::SoloCompradorPuede)));
+        }
+
+        #[ink::test]
+        fn cancelar_pedido_wrapper_false_y_true() {
+            let (mut c, accounts, id_publicacion) = setup_publicacion_basica();
+
+            let id_pedido = comprar_1(&mut c, &accounts, id_publicacion, 100)
+                .expect("compra ok");
+
+            // 1er llamada cancelar por VENDEDOR => no aplica política unilateral => Ok(false)
+            set_caller(accounts.alice);
+            let r1 = c.cancelar_pedido(id_pedido).expect("cancelar debe ok");
+            assert_eq!(r1, false);
+
+            // 2da llamada por COMPRADOR => aplica política unilateral => Ok(true)
+            set_caller(accounts.bob);
+            let r2 = c.cancelar_pedido(id_pedido).expect("cancelar debe ok");
+            assert_eq!(r2, true);
+        }
+
+
+        #[ink::test]
+        fn ver_compras_y_ventas_wrappers() {
+            let (mut c, accounts, id_publicacion) = setup_publicacion_basica();
+
+            let id_pedido = comprar_1(&mut c, &accounts, id_publicacion, 100)
+                .expect("compra ok");
+
+            // comprador ve compras
+            set_caller(accounts.bob);
+            let compras = c.ver_compras().expect("debe tener compras");
+            assert!(compras.iter().any(|p| p.id == id_pedido));
+
+            // vendedor ve ventas
+            set_caller(accounts.alice);
+            let ventas = c.ver_ventas().expect("debe tener ventas");
+            assert!(ventas.iter().any(|p| p.id == id_pedido));
+        }
+
     }
 }
