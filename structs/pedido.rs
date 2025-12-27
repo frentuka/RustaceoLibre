@@ -385,7 +385,7 @@ impl RustaceoLibre {
 
     //
 
-    /// Si el pedido indicada está pendiente y el usuario es el vendedor, se establece como recibida.
+    /// Si el pedido indicado está pendiente y el usuario es el vendedor, se establece como recibida.
     /// 
     /// Puede dar error si el usuario no está registrado, el pedido no existe,
     /// no está pendiente, ya fue recibido, no es el vendedor quien intenta despacharlo
@@ -397,7 +397,7 @@ impl RustaceoLibre {
 
         // validar venta #0
         let Some(ventas) = usuario.obtener_ventas()
-        else { return Err(ErrorProductoDespachado::TransaccionInexistente); };
+        else { return Err(ErrorProductoDespachado::SoloVendedorPuede); };
 
         // validar venta #1
         let Some(venta) = ventas.iter().find_map(|&id| if id == id_venta { Some(id) } else { None })
