@@ -491,7 +491,7 @@ impl RustaceoLibre {
 mod tests {
     use super::*;
     #[ink::test]
-    fn registrar_usuario_funciona_correctamente() {
+    fn registrar_usuario_comprador_funciona_correctamente() {
         let mut contrato = RustaceoLibre::default();
 
         let cuenta = AccountId::from([0x1; 32]);
@@ -502,6 +502,34 @@ mod tests {
 
         // Fallo por registrar el mismo usuario
         let resultado_repetido = contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor);
+        assert_eq!(resultado_repetido, Err(ErrorRegistrarUsuario::UsuarioYaExiste));
+    }
+    
+    #[ink::test]
+    fn registrar_usuario_vendedor_funciona_correctamente() {
+        let mut contrato = RustaceoLibre::default();
+
+        let cuenta = AccountId::from([0x3; 32]);
+
+        // Registro exitoso como Vendedor
+        let resultado = contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor);
+        assert_eq!(resultado, Ok(()));
+
+        let resultado_repetido = contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador);
+        assert_eq!(resultado_repetido, Err(ErrorRegistrarUsuario::UsuarioYaExiste));
+    }
+
+    #[ink::test]
+    fn registrar_usuario_ambos_funciona_correctamente() {
+        let mut contrato = RustaceoLibre::default();
+
+        let cuenta = AccountId::from([0x4; 32]);
+
+        // Registro exitoso como Ambos
+        let resultado = contrato._registrar_usuario(cuenta, RolDeSeleccion::Ambos);
+        assert_eq!(resultado, Ok(()));
+
+        let resultado_repetido = contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador);
         assert_eq!(resultado_repetido, Err(ErrorRegistrarUsuario::UsuarioYaExiste));
     }
 
