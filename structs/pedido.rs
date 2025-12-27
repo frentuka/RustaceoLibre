@@ -451,7 +451,7 @@ impl RustaceoLibre {
 
         // verificar que el usuario tenga compras
         let Some(compras) = usuario.obtener_compras()
-        else { return Err(ErrorProductoRecibido::PedidoInexistente); };
+        else { return Err(ErrorProductoRecibido::SoloCompradorPuede); };
 
         // verificar que el pedido exista en sus compras
         let Some(pedido) = compras.iter().find_map(|&id| if id == id_compra { Some(id) } else { None })
