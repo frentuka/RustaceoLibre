@@ -1,6 +1,6 @@
-use ink::{env::caller, prelude::vec::Vec, primitives::AccountId};
+use ink::{prelude::vec::Vec, primitives::AccountId};
 
-use crate::{rustaceo_libre::RustaceoLibre, structs::{disputa::{Disputa, EstadoDisputa}, producto::CategoriaProducto}};
+use crate::{rustaceo_libre::RustaceoLibre, structs::{producto::CategoriaProducto}};
 
 //
 // estado pedido

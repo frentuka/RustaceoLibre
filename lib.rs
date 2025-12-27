@@ -16,7 +16,6 @@ mod rustaceo_libre {
     // imports propios
     //
 
-    use crate::structs::disputa::{Disputa, DisputaResuelta, ErrorDisputarPedido, ErrorResolverDisputa};
     use crate::structs::usuario::{
         Usuario,
         StockProductos,
@@ -26,7 +25,12 @@ mod rustaceo_libre {
     };
 
     use crate::structs::producto::{
-        CategoriaProducto, ErrorIngresarStockProducto, ErrorRegistrarProducto, ErrorRetirarStockProducto, ErrorVerStockPropio, Producto
+        Producto,
+        CategoriaProducto,
+        ErrorIngresarStockProducto,
+        ErrorRetirarStockProducto,
+        ErrorRegistrarProducto,
+        ErrorVerStockPropio
     };
 
     use crate::structs::publicacion::{
@@ -47,6 +51,13 @@ mod rustaceo_libre {
         ErrorRetirarFondos,
         ErrorVerCompras,
         ErrorVerVentas,
+    };
+
+    use crate::structs::disputa::{
+        Disputa,
+        DisputaResuelta,
+        ErrorDisputarPedido,
+        ErrorResolverDisputa
     };
 
     //
