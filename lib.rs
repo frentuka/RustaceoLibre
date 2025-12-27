@@ -16,7 +16,7 @@ mod rustaceo_libre {
     // imports propios
     //
 
-    use crate::structs::disputa::Disputa;
+    use crate::structs::disputa::{Disputa, DisputaResuelta, ErrorDisputarPedido, ErrorResolverDisputa};
     use crate::structs::usuario::{
         Usuario,
         StockProductos,
@@ -463,6 +463,43 @@ mod rustaceo_libre {
         #[ink(message)]
         pub fn ver_calificacion_vendedor(&self) -> Option<u8> {
             self._ver_calificacion_vendedor(self.env().caller())
+        }
+
+        //
+        // disputa.rs:
+        //
+
+        /// Un comprador, después de recibir el producto, puede disputar su pedido aclarando el argumento para la disputa.
+        /// Sólo el comprador puede hacer esto y el vendedor tiene la posibilidad de, con esta misma función,
+        /// contraargumentar la disputa en su favor.
+        /// 
+        /// Sólo un miembro del Personal puede visualizar todas las disputas y darles finalización.
+        /// Una disputa que no tenga contraargumento del vendedor deberá esperar 14 días
+        /// para poder concluirse a favor del comprador.
+        /// 
+        /// Devolverá error si el usuario no existe, la compra no existe, no es el comprador o vendedor,
+        /// es el vendedor y no hay una disputa, es el comprador y ya realizó la disputa o la disputa ya concluyó.
+        #[ink(message)]
+        pub fn disputar_pedido(&mut self, id_pedido: u128, argumento: String) -> Result<(), ErrorDisputarPedido> {
+            self._disputar_pedido(self.env().block_timestamp(), self.env().caller(), id_pedido, argumento)
+        }
+
+        /// Da una disputa por resuelta según la información que brinda el miembro del Staff.
+        /// Entregará los fondos del pedido a quien corresponda.
+        /// 
+        /// Devolverá la información de pago correspondiente si la operación concretó correctamente.
+        /// Devolverá None si no es miembro del Staff, la disputa no existe o no está en curso.
+        #[ink(message)]
+        pub fn staff_resolver_disputa(&mut self, id_disputa: u128, resultado: DisputaResuelta) -> Result<(), ErrorResolverDisputa> {
+            let operacion = self._staff_resolver_disputa(self.env().caller(), id_disputa, resultado);
+
+            let Ok((id_ganador, valor_total)) = operacion
+            else { return Err(operacion.unwrap_err()) }; // safe unwrap
+
+            // transferir fondos al ganador de la disputa
+            let _ = self.env().transfer(id_ganador, valor_total);
+
+            Ok(())
         }
 
 ////////////////////////////////////////////////////////////////////////////////

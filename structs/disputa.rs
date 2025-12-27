@@ -1,3 +1,5 @@
+use std::mem::discriminant;
+
 use ink::primitives::AccountId;
 
 use crate::rustaceo_libre::RustaceoLibre;
@@ -69,19 +71,50 @@ pub enum ErrorDisputarPedido {
     SoloVendedorPuedeContraargumentar,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(
+    feature = "std",
+    derive(ink::storage::traits::StorageLayout)
+)]
+pub enum ErrorResolverDisputa {
+    UsuarioNoStaff,
+    PedidoInexistente,
+    DisputaNoEnCurso,
+    DisputaFinalizada
+}
+
 impl Disputa {
-    pub fn encurso_pendiente_contraargumentacion(&self) -> bool {
+    pub fn en_curso(&self) -> bool {
+        let EstadoDisputa::EnCurso(_) = &self.estado
+        else { return false; };
+
+        true
+    }
+
+    pub fn en_curso_pendiente_contraargumentacion(&self) -> bool {
         let EstadoDisputa::EnCurso(curso) = &self.estado
         else { return false; };
 
         matches!(curso, DisputaEnCurso::PendienteContraargumentacion)
     }
 
-    pub fn encurso_pendiente_definicion(&self) -> bool {
+    pub fn en_curso_pendiente_definicion(&self) -> bool {
         let EstadoDisputa::EnCurso(curso) = &self.estado
         else { return false; };
 
         matches!(curso, DisputaEnCurso::PendienteDefinicion)
+    }
+
+    /*
+        Resuelta
+     */
+
+    pub fn resuelta(&self) -> bool {
+        let EstadoDisputa::Resuelta(_) = &self.estado
+        else { return false; };
+
+        true
     }
 
     pub fn resuelta_favor_comprador(&self) -> bool {
@@ -100,12 +133,15 @@ impl Disputa {
 }
 
 impl RustaceoLibre {
-    /// Un comprador, después de recibir el producto, puede disputar su pedido aclarando el motivo de la disputa.
+
+    //
+
+    /// Un comprador, después de recibir el producto, puede disputar su pedido aclarando el argumento para la disputa.
     /// Sólo el comprador puede hacer esto y el vendedor tiene la posibilidad de, con esta misma función,
     /// contraargumentar la disputa en su favor.
     /// 
     /// Sólo un miembro del Personal puede visualizar todas las disputas y darles finalización.
-    /// Una disputa iniciada por el comprador que no tenga respuesta del vendedor deberá esperar 14 días
+    /// Una disputa que no tenga contraargumento del vendedor deberá esperar 14 días
     /// para poder concluirse a favor del comprador.
     /// 
     /// Devolverá error si el usuario no existe, la compra no existe, no es el comprador o vendedor,
@@ -125,7 +161,7 @@ impl RustaceoLibre {
             return Err(ErrorDisputarPedido::UsuarioNoParticipa);
         }
 
-        // validar disputa en curso
+        // validar disputa existente
         if let Some(id_disputa) = pedido.disputa {
             // la disputa existe. si caller es comprador, está volviendo a crear una disputa
             if caller == pedido.comprador {
@@ -136,7 +172,7 @@ impl RustaceoLibre {
             let Some(disputa) = self.disputas_en_curso.get(&id_disputa)
             else { return Err(ErrorDisputarPedido::DisputaFinalizada); };
 
-            if disputa.encurso_pendiente_contraargumentacion() {
+            if disputa.en_curso_pendiente_contraargumentacion() {
                 // vendedor ya contraargumentó
                 return Err(ErrorDisputarPedido::DisputaPendienteResolucion);
             }
@@ -161,7 +197,7 @@ impl RustaceoLibre {
             return Err(ErrorDisputarPedido::SoloCompradorPuedeDisputar);
         }
 
-        // si los fondos del pedido ya fueron transferidos no hay disputa posible sin embargar
+        // si los fondos del pedido ya fueron transferidos no hay disputa posible sin embargar (embargar es imposible)
         if pedido.fondos_fueron_transferidos {
             return Err(ErrorDisputarPedido::PlazoDeDisputaExpirado);
         }
@@ -202,29 +238,32 @@ impl RustaceoLibre {
         Ok(())
     }
 
+    //
+
     /// Da una disputa por resuelta según la información que brinda el miembro del Staff.
+    /// Entregará los fondos del pedido a quien corresponda.
     /// 
-    /// Devolverá true si la operación concretó correctamente.
-    /// Devolverá false si no es miembro del Staff, la disputa no existe o no está en curso.
-    pub fn _staff_resolver_disputa(&mut self, caller: AccountId, id_disputa: u128, resultado: DisputaResuelta) -> bool {
-        // validar que caller sea staff
+    /// Devolverá la información de pago correspondiente si la operación concretó correctamente.
+    /// Devolverá None si no es miembro del Staff, la disputa no existe o no está en curso.
+    pub fn _staff_resolver_disputa(&mut self, caller: AccountId, id_disputa: u128, resultado: DisputaResuelta) -> Result<(AccountId, u128), ErrorResolverDisputa> {
+        // validar que caller sea staff ni owner
         if !self.staff.contains(&caller) && caller != self.owner {
-            return false;
+            return Err(ErrorResolverDisputa::UsuarioNoStaff);
         }
 
         // validar que la disputa exista o esté en curso
         // si la disputa está en el listado de disputas en curso, no deberia poder estar resuelta
-        let Some(disputa) = self.disputas_en_curso.get(&id_disputa)
-        else { return false; };
+        let Some(mut disputa) = self.disputas_en_curso.get(&id_disputa).cloned()
+        else { return Err(ErrorResolverDisputa::DisputaNoEnCurso); };
 
         // todo bien
 
         // eliminar de "en curso" de ambos usuarios (comprador y vendedor)
-        let Some(pedido) = self.pedidos.get(&disputa.pedido)
+        let Some(mut pedido) = self.pedidos.get(&disputa.pedido).cloned()
         else {
             // el pedido no existe ¿? eliminar la disputa
             self.disputas_en_curso.remove_entry(&id_disputa);
-            return false;
+            return Err(ErrorResolverDisputa::PedidoInexistente);
         };
 
         // actualizar disputa pendiente comprador
@@ -240,16 +279,32 @@ impl RustaceoLibre {
         }
 
         // actualizar data de disputa
-        let mut disputa = disputa.clone();
-        disputa.estado = EstadoDisputa::Resuelta(resultado);
+        disputa.estado = EstadoDisputa::Resuelta(resultado.clone());
         disputa.interventor = Some(caller);
 
         // eliminar de "en curso"
         self.disputas_en_curso.remove_entry(&id_disputa);
 
         // agregar a "resueltas"
-        self.disputas_resueltas.insert(id_disputa, disputa);
+        self.disputas_resueltas.insert(id_disputa, disputa.clone());
 
-        true
+        // almacenar datos para después
+        let id_comprador = pedido.comprador;
+        let id_vendedor = pedido.vendedor;
+        let valor_total = pedido.valor_total;
+
+        // disputa: finalizar devolviendo fondos
+        // Se deben devolver fondos en lib.rs. Actualizar pedido marcando los fondos como entregados.
+
+        pedido.fondos_fueron_transferidos = true;
+        self.pedidos.insert(disputa.pedido, pedido);
+
+        let id_ganador: AccountId = match resultado {
+            DisputaResuelta::FavorComprador{ argumento_interventor: _ } => id_comprador,
+            DisputaResuelta::FavorVendedor{ argumento_interventor: _ } => id_vendedor
+        };
+
+        Ok((id_ganador, valor_total))
     }
+
 }
