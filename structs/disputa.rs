@@ -306,3 +306,374 @@ impl RustaceoLibre {
     }
 
 }
+
+#[cfg(test)]    
+
+mod tests_disputas {
+    use super::*;
+    use ink::primitives::AccountId;
+    use ink::prelude::string::String;
+
+    fn acc(byte: u8) -> AccountId {
+        AccountId::from([byte; 32])
+    }
+
+    fn pedido_base(id: u128, comprador: AccountId, vendedor: AccountId) -> Pedido {
+        Pedido {
+            id,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Recibido(1234),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        }
+    }
+
+    #[ink::test]
+    fn disputar_usuario_no_registrado() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let tercero = acc(3);
+
+        // Crear pedido
+        let id_pedido = 1;
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+
+        // tercero NO registrado
+        let r = c._disputar_pedido(0, tercero, id_pedido, "hola".into());
+        assert_eq!(r, Err(ErrorDisputarPedido::UsuarioNoRegistrado));
+    }
+
+    #[ink::test]
+    fn disputar_pedido_inexistente() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+
+        let r = c._disputar_pedido(0, comprador, 999, "hola".into());
+        assert_eq!(r, Err(ErrorDisputarPedido::PedidoInexistente));
+    }
+
+    #[ink::test]
+    fn disputar_usuario_no_participa() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let tercero = acc(3);
+        let id_pedido = 10;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        c._registrar_usuario(tercero, RolDeSeleccion::Comprador).unwrap();
+
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+
+        let r = c._disputar_pedido(0, tercero, id_pedido, "hola".into());
+        assert_eq!(r, Err(ErrorDisputarPedido::UsuarioNoParticipa));
+    }
+
+    #[ink::test]
+    fn disputar_solo_comprador_puede_iniciar() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 11;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+
+        // vendedor intenta iniciar disputa
+        let r = c._disputar_pedido(0, vendedor, id_pedido, "contra".into());
+        assert_eq!(r, Err(ErrorDisputarPedido::SoloCompradorPuedeDisputar));
+    }
+
+    #[ink::test]
+    fn disputar_plazo_expirado_si_fondos_transferidos() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 12;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        let mut p = pedido_base(id_pedido, comprador, vendedor);
+        p.fondos_fueron_transferidos = true;
+        c.pedidos.insert(id_pedido, p);
+
+        let r = c._disputar_pedido(0, comprador, id_pedido, "quiero disputar".into());
+        assert_eq!(r, Err(ErrorDisputarPedido::PlazoDeDisputaExpirado));
+    }
+
+    #[ink::test]
+    fn disputar_crea_disputa_ok() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 13;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+
+        let arg = "producto no llegó".to_string();
+        let r = c._disputar_pedido(1000, comprador, id_pedido, arg.clone());
+        assert_eq!(r, Ok(()));
+
+        let pedido = c.pedidos.get(&id_pedido).unwrap();
+        let id_disputa = pedido.disputa.expect("pedido debería tener disputa");
+
+        let disputa = c.disputas_en_curso.get(&id_disputa).expect("disputa debe existir");
+        assert_eq!(disputa.pedido, id_pedido);
+        assert_eq!(disputa.timestamp, 1000);
+        assert_eq!(disputa.argumento_comprador, arg);
+        assert!(disputa.argumento_vendedor.is_none());
+        assert!(matches!(
+            disputa.estado,
+            EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion)
+        ));
+    }
+
+    #[ink::test]
+    fn disputar_con_disputa_existente_comprador_no_puede() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 14;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Crear disputa ya asociada
+        let id_disputa = c.next_id_disputas();
+        let disputa = Disputa {
+            id: id_disputa,
+            timestamp: 0,
+            pedido: id_pedido,
+            estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion),
+            argumento_comprador: "x".into(),
+            argumento_vendedor: None,
+            interventor: None,
+        };
+        c.disputas_en_curso.insert(id_disputa, disputa);
+
+        let mut p = pedido_base(id_pedido, comprador, vendedor);
+        p.disputa = Some(id_disputa);
+        c.pedidos.insert(id_pedido, p);
+
+        let r = c._disputar_pedido(0, comprador, id_pedido, "otra".into());
+        assert_eq!(r, Err(ErrorDisputarPedido::SoloVendedorPuedeContraargumentar));
+    }
+
+    #[ink::test]
+    fn disputar_contraargumento_vendedor_ok() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 15;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        let id_disputa = c.next_id_disputas();
+        let disputa = Disputa {
+            id: id_disputa,
+            timestamp: 0,
+            pedido: id_pedido,
+            estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion),
+            argumento_comprador: "x".into(),
+            argumento_vendedor: None,
+            interventor: None,
+        };
+        c.disputas_en_curso.insert(id_disputa, disputa);
+
+        let mut p = pedido_base(id_pedido, comprador, vendedor);
+        p.disputa = Some(id_disputa);
+        c.pedidos.insert(id_pedido, p);
+
+        let r = c._disputar_pedido(2000, vendedor, id_pedido, "yo sí envié".into());
+        assert_eq!(r, Ok(()));
+
+        let d = c.disputas_en_curso.get(&id_disputa).unwrap();
+        assert_eq!(d.argumento_vendedor, Some("yo sí envié".into()));
+        assert!(matches!(
+            d.estado,
+            EstadoDisputa::EnCurso(DisputaEnCurso::PendienteDefinicion)
+        ));
+    }
+
+    #[ink::test]
+    fn disputar_disputa_finalizada_si_no_esta_en_curso() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 16;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // pedido tiene referencia a disputa pero no está en disputas_en_curso
+        let mut p = pedido_base(id_pedido, comprador, vendedor);
+        p.disputa = Some(999);
+        c.pedidos.insert(id_pedido, p);
+
+        let r = c._disputar_pedido(0, vendedor, id_pedido, "x".into());
+        assert_eq!(r, Err(ErrorDisputarPedido::DisputaFinalizada));
+    }
+
+    // ---------------- staff resolver ----------------
+
+    #[ink::test]
+    fn staff_resolver_usuario_no_staff() {
+        let mut c = RustaceoLibre::new(0);
+        let cualquiera = acc(9);
+
+        let r = c._staff_resolver_disputa(
+            cualquiera,
+            1,
+            DisputaResuelta::FavorComprador { argumento_interventor: "x".into() }
+        );
+        assert_eq!(r, Err(ErrorResolverDisputa::UsuarioNoStaff));
+    }
+
+    #[ink::test]
+    fn staff_resolver_disputa_no_en_curso() {
+        let mut c = RustaceoLibre::new(0);
+
+        // setear staff u owner según tu implementación:
+        // ejemplo: c.owner = acc(1);
+        // o: c.staff.push(acc(1));
+        let staff = acc(1);
+        c.staff.push(staff); // <-- ajustá si staff no es Vec
+
+        let r = c._staff_resolver_disputa(
+            staff,
+            123,
+            DisputaResuelta::FavorVendedor { argumento_interventor: "ok".into() }
+        );
+        assert_eq!(r, Err(ErrorResolverDisputa::DisputaNoEnCurso));
+    }
+
+    #[ink::test]
+    fn staff_resolver_pedido_inexistente_elimina_disputa() {
+        let mut c = RustaceoLibre::new(0);
+        let staff = acc(1);
+        c.staff.push(staff); // ajustar
+
+        let id_disputa = 1;
+        let d = Disputa {
+            id: id_disputa,
+            timestamp: 0,
+            pedido: 9999, // pedido inexistente
+            estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteDefinicion),
+            argumento_comprador: "x".into(),
+            argumento_vendedor: Some("y".into()),
+            interventor: None,
+        };
+        c.disputas_en_curso.insert(id_disputa, d);
+
+        let r = c._staff_resolver_disputa(
+            staff,
+            id_disputa,
+            DisputaResuelta::FavorComprador { argumento_interventor: "resuelvo".into() }
+        );
+        assert_eq!(r, Err(ErrorResolverDisputa::PedidoInexistente));
+
+        // debe haberse eliminado de "en curso"
+        assert!(c.disputas_en_curso.get(&id_disputa).is_none());
+    }
+
+    #[ink::test]
+    fn staff_resolver_favor_comprador_ok() {
+        let mut c = RustaceoLibre::new(0);
+        let staff = acc(1);
+        c.staff.push(staff); // ajustar
+
+        let comprador = acc(2);
+        let vendedor = acc(3);
+        let id_pedido = 100;
+        let id_disputa = 200;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        let mut p = pedido_base(id_pedido, comprador, vendedor);
+        p.valor_total = 777;
+        p.disputa = Some(id_disputa);
+        c.pedidos.insert(id_pedido, p);
+
+        let d = Disputa {
+            id: id_disputa,
+            timestamp: 0,
+            pedido: id_pedido,
+            estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteDefinicion),
+            argumento_comprador: "x".into(),
+            argumento_vendedor: Some("y".into()),
+            interventor: None,
+        };
+        c.disputas_en_curso.insert(id_disputa, d);
+
+        let res = DisputaResuelta::FavorComprador { argumento_interventor: "a favor comprador".into() };
+        let r = c._staff_resolver_disputa(staff, id_disputa, res.clone());
+        assert_eq!(r, Ok((comprador, 777)));
+
+        // en curso removida
+        assert!(c.disputas_en_curso.get(&id_disputa).is_none());
+
+        // resuelta guardada
+        let d2 = c.disputas_resueltas.get(&id_disputa).unwrap();
+        assert!(d2.resuelta_favor_comprador());
+        assert_eq!(d2.interventor, Some(staff));
+
+        // pedido fondos transferidos
+        let p2 = c.pedidos.get(&id_pedido).unwrap();
+        assert!(p2.fondos_fueron_transferidos);
+    }
+
+    #[ink::test]
+    fn staff_resolver_favor_vendedor_ok() {
+        let mut c = RustaceoLibre::new(0);
+        let staff = acc(1);
+        c.staff.push(staff); // ajustar
+
+        let comprador = acc(2);
+        let vendedor = acc(3);
+        let id_pedido = 101;
+        let id_disputa = 201;
+
+        c._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        c._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        let mut p = pedido_base(id_pedido, comprador, vendedor);
+        p.valor_total = 555;
+        p.disputa = Some(id_disputa);
+        c.pedidos.insert(id_pedido, p);
+
+        let d = Disputa {
+            id: id_disputa,
+            timestamp: 0,
+            pedido: id_pedido,
+            estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteDefinicion),
+            argumento_comprador: "x".into(),
+            argumento_vendedor: Some("y".into()),
+            interventor: None,
+        };
+        c.disputas_en_curso.insert(id_disputa, d);
+
+        let res = DisputaResuelta::FavorVendedor { argumento_interventor: "a favor vendedor".into() };
+        let r = c._staff_resolver_disputa(staff, id_disputa, res.clone());
+        assert_eq!(r, Ok((vendedor, 555)));
+    }
+}
