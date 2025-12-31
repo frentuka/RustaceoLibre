@@ -146,7 +146,7 @@ impl RustaceoLibre {
     /// es el vendedor y no hay una disputa, es el comprador y ya realizó la disputa o la disputa ya concluyó.
     pub fn _disputar_pedido(&mut self, timestamp: u64, caller: AccountId, id_pedido: u128, argumento: String) -> Result<(), ErrorDisputarPedido> {
         // validar usuario
-        if !self.usuarios.contains(caller) {
+        if !self.usuarios.contains_key(&caller) {
             return Err(ErrorDisputarPedido::UsuarioNoRegistrado);
         }
 
@@ -218,15 +218,15 @@ impl RustaceoLibre {
         self.disputas_en_curso.insert(id_nueva_disputa, nueva_disputa);
 
         // actualizar disputas en curso en comprador
-        if let Some(mut comprador) = self.usuarios.get(pedido.comprador) {
+        if let Some(mut comprador) = self.usuarios.get(&pedido.comprador).cloned() {
             comprador.agregar_disputa_comprador(id_nueva_disputa);
-            self.usuarios.insert(comprador.id, &comprador);
+            self.usuarios.insert(comprador.id, comprador);
         }
 
         // actualizar disputas en curso en vendedor
-        if let Some(mut vendedor) = self.usuarios.get(pedido.vendedor) {
+        if let Some(mut vendedor) = self.usuarios.get(&pedido.vendedor).cloned() {
             vendedor.agregar_disputa_vendedor(id_nueva_disputa);
-            self.usuarios.insert(vendedor.id, &vendedor);
+            self.usuarios.insert(vendedor.id, vendedor);
         }
 
         // actualizar y guardar pedido para reflejar disputa
@@ -265,15 +265,15 @@ impl RustaceoLibre {
         };
 
         // actualizar disputa pendiente comprador
-        if let Some(mut comprador) = self.usuarios.get(pedido.comprador) {
+        if let Some(mut comprador) = self.usuarios.get(&pedido.comprador).cloned() {
             comprador.eliminiar_disputa_comprador(id_disputa);
-            self.usuarios.insert(comprador.id, &comprador);
+            self.usuarios.insert(comprador.id, comprador);
         }
 
         // actualizar disputa pendiente vendedor
-        if let Some(mut vendedor) = self.usuarios.get(pedido.vendedor) {
+        if let Some(mut vendedor) = self.usuarios.get(&pedido.vendedor).cloned() {
             vendedor.eliminiar_disputa_vendedor(id_disputa);
-            self.usuarios.insert(vendedor.id, &vendedor);
+            self.usuarios.insert(vendedor.id, vendedor);
         }
 
         // actualizar data de disputa

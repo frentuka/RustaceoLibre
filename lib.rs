@@ -17,20 +17,11 @@ mod rustaceo_libre {
     //
 
     use crate::structs::usuario::{
-        Usuario,
-        StockProductos,
-        RolDeSeleccion,
-        ErrorAscenderRolUsuario,
-        ErrorRegistrarUsuario,
+        ErrorAscenderRolUsuario, ErrorRegistrarUsuario, Rol, RolDeSeleccion, StockProductos, Usuario
     };
 
     use crate::structs::producto::{
-        Producto,
-        CategoriaProducto,
-        ErrorIngresarStockProducto,
-        ErrorRetirarStockProducto,
-        ErrorRegistrarProducto,
-        ErrorVerStockPropio
+        CategoriaProducto, ErrorIngresarStockProducto, ErrorRegistrarProducto, ErrorRetirarStockProducto, ErrorVerStockPropio, Producto
     };
 
     use crate::structs::publicacion::{
@@ -68,7 +59,7 @@ mod rustaceo_libre {
     #[ink(storage)]
     pub struct RustaceoLibre {
         /// <ID del usuario, Usuario>
-        pub usuarios: Mapping<AccountId, Usuario>,
+        pub usuarios: BTreeMap<AccountId, Usuario>,
         /// <ID, Compra>
         pub pedidos: BTreeMap<u128, Pedido>,
         /// <ID, Disputa>
@@ -144,7 +135,7 @@ mod rustaceo_libre {
                 return false;
             }
 
-            if self.usuarios.contains(&id_staff) {
+            if self.usuarios.contains_key(&id_staff) {
                 return false;
             }
 
@@ -175,8 +166,59 @@ mod rustaceo_libre {
         }
 
         //
+        // ReportesView
+        //
+
+        /// Devuelve un vector conteniendo la ID de la totalidad de los pedidos realizados
+        #[ink(message)]
+        pub fn ver_id_pedidos(&self) -> Vec<u128> {
+            self.pedidos.keys().cloned().collect()
+        }
+
+        /// Devuelve un vector conteniendo la ID de la totalidad de los pedidos realizados
+        #[ink(message)]
+        pub fn ver_id_productos(&self) -> Vec<u128> {
+            self.productos.keys().cloned().collect()
+        }
+
+        /// Devuelve un vector conteniendo la ID de la totalidad de los pedidos realizados
+        #[ink(message)]
+        pub fn ver_id_publicaciones(&self) -> Vec<u128> {
+            self.publicaciones.keys().cloned().collect()
+        }
+
+        //
         // /structs/usuario.rs    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //
+
+        /// Para ReportesView:
+        /// Devuelve un listado con todas las IDs de los usuarios registrados como compradores
+        #[ink(message)]
+        pub fn ver_usuarios_compradores(&self) -> Vec<AccountId> {
+            self.usuarios.iter().filter_map(|(id, user)| {
+                match user.rol {
+                    Rol::Comprador(_) | Rol::Ambos(_, _) => Some(id.clone()),
+                    _ => None
+                }
+            }).collect()
+        }
+
+        /// Para ReportesView:
+        /// Devuelve un listado con todas las IDs de los usuarios registrados como vendedores
+        #[ink(message)]
+        pub fn ver_usuarios_vendedores(&self) -> Vec<AccountId> {
+            self.usuarios.iter().filter_map(|(id, user)| {
+                match user.rol {
+                    Rol::Vendedor(_) | Rol::Ambos(_, _) => Some(id.clone()),
+                    _ => None
+                }
+            }).collect()
+        }
+
+        #[ink(message)]
+        pub fn ver_cantidad_compras(&self, user: AccountId) -> Option<u128> {
+            self._ver_cantidad_compras(user)
+        }
 
         /// Registra un usuario en el Mapping de usuarios.
         /// 
@@ -218,10 +260,10 @@ mod rustaceo_libre {
 
         /// Dada una ID, devuelve la publicación
         /// 
-        /// Devolverá None si la publicación no existe o el usuario no está registrado
+        /// Devolverá None si la publicación no existe
         #[ink(message)]
         pub fn ver_publicacion(&self, id_publicacion: u128) -> Option<Publicacion> {
-            self._ver_publicacion(self.env().caller(), id_publicacion)
+            self._ver_publicacion(id_publicacion)
         }
 
         /// Devuelve todos los productos publicados por el usuario que lo ejecute
@@ -270,7 +312,7 @@ mod rustaceo_libre {
         /// Devuelve None si el producto no existe
         #[ink(message)]
         pub fn ver_producto(&self, id_producto: u128) -> Option<Producto> {
-            self._ver_producto(self.env().caller(), id_producto)
+            self._ver_producto(id_producto)
         }
 
         /// Devuelve el listado de stock del vendedor que llame la función

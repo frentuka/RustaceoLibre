@@ -15,9 +15,11 @@ use crate::{rustaceo_libre::RustaceoLibre, structs::usuario::StockProductos};
 )]
 pub enum CategoriaProducto {
     #[default]
+    Ninguna,
     Hogar,
     Tecnologia,
-    Ropa,
+    Indumentaria,
+    Ferreteria
 }
 
 //
@@ -34,6 +36,7 @@ pub struct Producto {
     pub nombre: String,
     pub descripcion: String,
     pub categoria: CategoriaProducto,
+    pub ventas: u128
 }
 
 //
@@ -46,6 +49,7 @@ impl Producto {
             nombre,
             descripcion,
             categoria,
+            ventas: 0
         }
     }
 }
@@ -112,7 +116,7 @@ impl RustaceoLibre {
     /// Devuelve error si el usuario no está registrado o no es vendedor.
     pub(crate) fn _registrar_producto(&mut self, caller: AccountId, nombre: String, descripcion: String, categoria: CategoriaProducto, stock_inicial: u32) -> Result<u128, ErrorRegistrarProducto> {
         // validar usuario
-        let Some(mut usuario) = self.usuarios.get(caller)
+        let Some(mut usuario) = self.usuarios.get(&caller).cloned()
         else { return Err(ErrorRegistrarProducto::UsuarioNoRegistrado); };
 
         // validar que sea vendedor
@@ -129,7 +133,7 @@ impl RustaceoLibre {
 
         // guardar stock inicial del producto en el vendedor
         usuario.establecer_stock_producto(&id_producto, &stock_inicial);
-        self.usuarios.insert(caller, &usuario);
+        self.usuarios.insert(caller, usuario);
 
         Ok(id_producto)
     }
@@ -148,7 +152,7 @@ impl RustaceoLibre {
         }
         
         // validar usuario
-        let Some(mut usuario) = self.usuarios.get(caller)
+        let Some(mut usuario) = self.usuarios.get(&caller).cloned()
         else { return Err(ErrorIngresarStockProducto::UsuarioNoRegistrado); };
 
         // validar que sea vendedor
@@ -168,7 +172,7 @@ impl RustaceoLibre {
 
         // todo bien
         usuario.establecer_stock_producto(&id_producto, &nuevo_stock_actual);
-        self.usuarios.insert(usuario.id, &usuario);
+        self.usuarios.insert(usuario.id, usuario);
 
         Ok(nuevo_stock_actual)
     }
@@ -187,7 +191,7 @@ impl RustaceoLibre {
         }
         
         // validar usuario
-        let Some(mut usuario) = self.usuarios.get(caller)
+        let Some(mut usuario) = self.usuarios.get(&caller).cloned()
         else { return Err(ErrorRetirarStockProducto::UsuarioNoRegistrado); };
 
         // validar que sea vendedor
@@ -208,7 +212,7 @@ impl RustaceoLibre {
 
         // todo bien
         usuario.establecer_stock_producto(&id_producto, &nuevo_stock_actual);
-        self.usuarios.insert(usuario.id, &usuario);
+        self.usuarios.insert(usuario.id, usuario);
 
         Ok(nuevo_stock_actual)
     }
@@ -217,12 +221,8 @@ impl RustaceoLibre {
 
     /// Dada una ID, devuelve el producto correspondiente si es posible
     /// 
-    /// Devolverá None si el producto no existe o el usuario no está registrado
-    pub(crate) fn _ver_producto(&self, caller: AccountId, id_producto: u128) -> Option<Producto> {
-        if !self.usuarios.contains(caller) {
-            return None;
-        }
-
+    /// Devolverá None si el producto no existe
+    pub(crate) fn _ver_producto(&self, id_producto: u128) -> Option<Producto> {
         self.productos.get(&id_producto).cloned()
     }
 
@@ -230,7 +230,7 @@ impl RustaceoLibre {
     /// 
     /// Dará error si el usuario no está registrado, no es vendedor o no posee stock de ningún producto
     pub(crate) fn _ver_stock_propio(&self, caller: AccountId) -> Result<StockProductos, ErrorVerStockPropio> {
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(usuario) = self.usuarios.get(&caller)
         else { return Err(ErrorVerStockPropio::UsuarioNoRegistrado); };
 
         if !usuario.es_vendedor() {
@@ -291,11 +291,12 @@ mod tests {
                 nombre,
                 descripcion,
                 categoria,
+                ventas: 0
             })
         );
 
         // Verificar que el stock esté en el usuario
-        let usuario = contrato.usuarios.get(vendedor).unwrap();
+        let usuario = contrato.usuarios.get(&vendedor).unwrap();
         let stock = usuario.obtener_stock_producto(&id_producto);
         assert_eq!(stock, Some(stock_inicial));
     }
@@ -368,6 +369,7 @@ mod tests {
             nombre: "Producto".to_string(),
             descripcion: "Desc".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
@@ -390,6 +392,7 @@ mod tests {
             nombre: "Producto".to_string(),
             descripcion: "Desc".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
@@ -415,6 +418,7 @@ mod tests {
             nombre: "Producto".to_string(),
             descripcion: "Desc".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
@@ -446,6 +450,7 @@ mod tests {
             nombre: "Producto".to_string(),
             descripcion: "Desc".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
@@ -472,6 +477,7 @@ mod tests {
             nombre: "Producto".to_string(),
             descripcion: "Desc".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
@@ -498,6 +504,7 @@ mod tests {
             nombre: "Producto".to_string(),
             descripcion: "Desc".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
@@ -520,6 +527,7 @@ mod tests {
             nombre: "Producto".to_string(),
             descripcion: "Desc".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
         let id_producto = contrato.next_id_productos();
         contrato.productos.insert(id_producto, producto);
@@ -540,6 +548,7 @@ mod tests {
             nombre: "asd".to_string(),
             descripcion: "asd".to_string(),
             categoria: CategoriaProducto::Hogar,
+            ventas: 0
         };
 
         let id_producto = contrato.next_id_productos();
@@ -588,12 +597,11 @@ mod tests {
     //
     
     #[ink::test]
-    fn ver_producto_falla_usuario_no_registrado() {
+    fn ver_producto_falla_producto_inexistente() {
     let contrato = RustaceoLibre::default();
-    let caller = AccountId::from([0x4; 32]);
-    let id_producto = 1;
+    let id_producto = 13548;
 
-    let resultado = contrato._ver_producto(caller, id_producto);
+    let resultado = contrato._ver_producto(id_producto);
 
     assert_eq!(resultado, None);
 }

@@ -109,7 +109,7 @@ impl RustaceoLibre {
         }
 
         // validar usuario
-        let Some(mut usuario) = self.usuarios.get(caller) else {
+        let Some(mut usuario) = self.usuarios.get(&caller).cloned() else {
             return Err(ErrorRealizarPublicacion::UsuarioNoRegistrado);
         };
 
@@ -144,7 +144,7 @@ impl RustaceoLibre {
 
         // agregar al vendedor
         usuario.agregar_publicacion(id_publicacion);
-        self.usuarios.insert(usuario.id, &usuario);
+        self.usuarios.insert(usuario.id, usuario);
 
         // fin
         Ok(id_publicacion)
@@ -156,7 +156,7 @@ impl RustaceoLibre {
     /// Devuelve Error si el usuario no está registrado, la venta no existe,
     /// el usuario no es el vendedor o la operación es imposible por falta de stock/cantidad ofertada.
     pub(crate) fn _modificar_cantidad_ofertada(&mut self, caller: AccountId, id_publicacion: u128, nueva_cantidad_ofertada: u32) -> Result<(), ErrorModificarCantidadOfertada> {
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(usuario) = self.usuarios.get(&caller).cloned()
         else { return Err(ErrorModificarCantidadOfertada::UsuarioInexistente); };
 
         if !usuario.es_vendedor() {
@@ -206,7 +206,7 @@ impl RustaceoLibre {
         // actualizado:
         // se modificaba publicacion.cantidad_ofertada localmente, pero no se guardaba la publicación actualizada en self.publicaciones ni en self.usuarios
         self.publicaciones.insert(id_publicacion, publicacion);
-        self.usuarios.insert(usuario.id, &usuario);
+        self.usuarios.insert(usuario.id, usuario);
 
         Ok(())
     }
@@ -215,11 +215,8 @@ impl RustaceoLibre {
 
     /// Dada una ID, devuelve la publicación
     /// 
-    /// Devolverá None si la publicación no existe o el usuario no está registrado
-    pub(crate) fn _ver_publicacion(&self, caller: AccountId, id_publicacion: u128) -> Option<Publicacion> {
-        if !self.usuarios.contains(caller) {
-            return None;
-        }
+    /// Devolverá None si la publicación no existe
+    pub(crate) fn _ver_publicacion(&self, id_publicacion: u128) -> Option<Publicacion> {
         self.publicaciones.get(&id_publicacion).cloned()
     }
 
@@ -229,7 +226,7 @@ impl RustaceoLibre {
     /// 
     /// Dará error si el usuario no existe, no está registrado como vendedor o no tiene publicaciones.
     pub(crate) fn _ver_publicaciones_vendedor(&self, caller: AccountId) -> Result<Vec<Publicacion>, ErrorVerPublicacionesVendedor> {
-        let Some(caller) = self.usuarios.get(caller)
+        let Some(caller) = self.usuarios.get(&caller)
         else { return Err(ErrorVerPublicacionesVendedor::UsuarioNoRegistrado); };
 
         if !caller.es_vendedor() {
@@ -295,7 +292,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &15); // Configura stock inicial
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 0);
         assert!(matches!(result, Err(ErrorRealizarPublicacion::PrecioCero)));
@@ -314,7 +311,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &15); // Configura stock inicial
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._realizar_publicacion(caller, 1, 0, 100);
         assert!(matches!(result, Err(ErrorRealizarPublicacion::StockInsuficiente))); // Cantidad 0 implica stock insuficiente
@@ -339,7 +336,7 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 100);
         assert!(matches!(result, Err(ErrorRealizarPublicacion::NoEsVendedor)));
@@ -358,7 +355,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &5); // Stock menor que cantidad ofertada
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 100);
@@ -378,7 +375,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &15); // Stock suficiente
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 100);
         assert!(matches!(result, Err(ErrorRealizarPublicacion::ProductoInexistente)));
@@ -397,7 +394,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &15); // Stock inicial > cantidad ofertada
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
 
         let result = rustaceo._realizar_publicacion(caller, 1, 10, 100);
@@ -409,7 +406,7 @@ mod tests {
         assert_eq!(publicacion.producto, 1);
         assert_eq!(publicacion.cantidad_ofertada, 10);
         assert_eq!(publicacion.precio_unitario, 100);
-        let updated_user = rustaceo.usuarios.get(caller).unwrap();
+        let updated_user = rustaceo.usuarios.get(&caller).unwrap();
         let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
         assert_eq!(updated_stock, 5); // 15 - 10
     }
@@ -433,7 +430,7 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15);
         assert!(matches!(result, Err(ErrorModificarCantidadOfertada::NoEsVendedor)));
@@ -451,7 +448,7 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._modificar_cantidad_ofertada(caller, 0, 15);
         assert!(matches!(result, Err(ErrorModificarCantidadOfertada::PublicacionInexistente)));
@@ -470,7 +467,7 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         let publicacion = Publicacion::new(otro_vendedor, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
 
@@ -491,7 +488,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &15);
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
 
@@ -512,7 +509,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &15); // Stock suficiente
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
         rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
@@ -521,7 +518,7 @@ mod tests {
         assert!(result.is_ok());
         let updated_pub = rustaceo.publicaciones.get(&0).unwrap();
         assert_eq!(updated_pub.cantidad_ofertada, 12);
-        let updated_user = rustaceo.usuarios.get(caller).unwrap();
+        let updated_user = rustaceo.usuarios.get(&caller).unwrap();
         let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
         assert_eq!(updated_stock, 13); // 15 - (12 - 10) = 13
     }
@@ -539,7 +536,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &5); // Stock inicial
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
         rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
@@ -548,7 +545,7 @@ mod tests {
         assert!(result.is_ok());
         let updated_pub = rustaceo.publicaciones.get(&0).unwrap();
         assert_eq!(updated_pub.cantidad_ofertada, 8); // Now should pass with insert
-        let updated_user = rustaceo.usuarios.get(caller).unwrap();
+        let updated_user = rustaceo.usuarios.get(&caller).unwrap();
         let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
         assert_eq!(updated_stock, 7); // 5 + (10 - 8) = 7
     }
@@ -566,7 +563,7 @@ mod tests {
             cant_calificaciones: 0,
         }));
         usuario.establecer_stock_producto(&1, &5); // Stock insuficiente
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
         rustaceo.productos.insert(1, Producto::new(String::from("Test"), String::from("Desc"), CategoriaProducto::Hogar));
@@ -575,7 +572,7 @@ mod tests {
         assert!(result.is_ok());
         let updated_pub = rustaceo.publicaciones.get(&0).unwrap();
         assert_eq!(updated_pub.cantidad_ofertada, 15); // Verifica que se actualice a 15
-        let updated_user = rustaceo.usuarios.get(caller).unwrap();
+        let updated_user = rustaceo.usuarios.get(&caller).unwrap();
         let updated_stock = updated_user.obtener_stock_producto(&1).unwrap();
         assert_eq!(updated_stock, 0); // 5 - 5 = 0
     }
@@ -583,9 +580,7 @@ mod tests {
     #[ink::test]
     fn test_ver_publicacion_usuario_no_registrado() {
         let rustaceo = RustaceoLibre::new(0);
-        let caller = AccountId::from([0x1; 32]);
-
-        let result = rustaceo._ver_publicacion(caller, 0);
+        let result = rustaceo._ver_publicacion(0);
         assert!(result.is_none());
     }
 
@@ -601,9 +596,9 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
-        let result = rustaceo._ver_publicacion(caller, 0);
+        let result = rustaceo._ver_publicacion(0);
         assert!(result.is_none());
     }
 
@@ -626,7 +621,7 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._ver_publicaciones_vendedor(caller);
         assert!(matches!(result, Err(ErrorVerPublicacionesVendedor::NoEsVendedor)));
@@ -644,7 +639,7 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
 
         let result = rustaceo._ver_publicaciones_vendedor(caller);
         assert!(matches!(result, Err(ErrorVerPublicacionesVendedor::NoTienePublicaciones)));
@@ -662,7 +657,7 @@ mod tests {
             total_calificaciones: 0,
             cant_calificaciones: 0,
         }));
-        rustaceo.usuarios.insert(caller, &usuario);
+        rustaceo.usuarios.insert(caller, usuario);
         let publicacion = Publicacion::new(caller, 1, 10, 100);
         rustaceo.publicaciones.insert(0, publicacion);
 

@@ -246,7 +246,7 @@ impl RustaceoLibre {
         }
         
         // validar usuario
-        let Some(comprador) = self.usuarios.get(caller)
+        let Some(comprador) = self.usuarios.get(&caller).cloned()
         else { return Err(ErrorComprarProducto::UsuarioInexistente); };
         
         // validar rol
@@ -265,7 +265,7 @@ impl RustaceoLibre {
 
         // validar vendedor
         let id_vendedor = publicacion.vendedor;
-        let Some(vendedor) = self.usuarios.get(id_vendedor)
+        let Some(vendedor) = self.usuarios.get(&id_vendedor).cloned()
         else{ return Err(ErrorComprarProducto::VendedorInexistente);};
 
         // validar que la cantidad ofertada en la publicación sea <= a la cantidad comprada
@@ -311,7 +311,7 @@ impl RustaceoLibre {
         let mut comprador = comprador;
         comprador.agregar_compra(id_transaccion);
 
-        self.usuarios.insert(comprador.id,&comprador);
+        self.usuarios.insert(comprador.id,comprador);
 
         //
         // actualizar ventas al vendedor
@@ -320,7 +320,7 @@ impl RustaceoLibre {
         let mut vendedor = vendedor;
         vendedor.agregar_venta(id_transaccion);
 
-        self.usuarios.insert(vendedor.id,&vendedor);
+        self.usuarios.insert(vendedor.id,vendedor);
 
         // fin
         Ok( ResultadoComprarProducto {
@@ -345,7 +345,7 @@ impl RustaceoLibre {
     /// el usuario no es el vendedor de la publicación o el tiempo pasado no condice con la política de reclamo
     pub fn _retirar_fondos(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<u128, ErrorRetirarFondos> {
         // validar usuario
-        if !self.usuarios.contains(caller) {
+        if !self.usuarios.contains_key(&caller) {
             return Err(ErrorRetirarFondos::UsuarioNoRegistrado);
         }
 
@@ -463,7 +463,7 @@ impl RustaceoLibre {
     /// o ya fue cancelada.
     pub fn _pedido_despachado(&mut self, timestamp: u64, caller: AccountId, id_venta: u128) -> Result<(), ErrorProductoDespachado> {
         // validar usuario
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(usuario) = self.usuarios.get(&caller).cloned()
         else { return Err(ErrorProductoDespachado::UsuarioNoRegistrado); };
 
         // validar venta #0
@@ -516,7 +516,7 @@ impl RustaceoLibre {
     /// o ya fue cancelado.
     pub fn _pedido_recibido(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<(), ErrorProductoRecibido> {
         // verificar usuario
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(usuario) = self.usuarios.get(&caller).cloned()
         else { return Err(ErrorProductoRecibido::UsuarioNoRegistrado); };
 
         // verificar que el usuario tenga compras
@@ -565,7 +565,7 @@ impl RustaceoLibre {
         }
 
         // verificar usurio registrado
-        if !self.usuarios.contains(caller) {
+        if !self.usuarios.contains_key(&caller) {
             return Err(ErrorCalificarPedido::UsuarioNoRegistrado);
         }
 
@@ -586,12 +586,12 @@ impl RustaceoLibre {
             }
 
             // verificar comprador
-            let Some(mut vendedor) = self.usuarios.get(compra.vendedor)
+            let Some(mut vendedor) = self.usuarios.get(&compra.vendedor).cloned()
             else { return Err(ErrorCalificarPedido::VendedorInexistente); };
 
             // realizar calificación y guardar
             vendedor.calificar_como_vendedor(calificacion);
-            self.usuarios.insert(vendedor.id, &vendedor);
+            self.usuarios.insert(vendedor.id, vendedor);
 
             // guardar calificación en transaccion
             let mut compra = compra.clone();
@@ -608,12 +608,12 @@ impl RustaceoLibre {
             }
 
             // verificar comprador
-            let Some(mut comprador) = self.usuarios.get(compra.comprador)
+            let Some(mut comprador) = self.usuarios.get(&compra.comprador).cloned()
             else { return Err(ErrorCalificarPedido::CompradorInexistente); };
 
             // realizar calificación y guardar
             comprador.calificar_como_comprador(calificacion);
-            self.usuarios.insert(comprador.id, &comprador);
+            self.usuarios.insert(comprador.id, comprador);
 
             // guardar calificación en transaccion
             let mut compra = compra.clone();
@@ -640,7 +640,7 @@ impl RustaceoLibre {
     /// si el pedido ya fue cancelado o recibido y si quien solicita la cancelación ya la solicitó antes.
     pub fn _cancelar_pedido(&mut self, timestamp: u64, caller: AccountId, id_pedido: u128) -> Result<Option<(AccountId, u128)>, ErrorCancelarPedido> {
         // validar usuario
-        let Some(_) = self.usuarios.get(caller)
+        let Some(_) = self.usuarios.get(&caller)
         else { return Err(ErrorCancelarPedido::UsuarioNoRegistrado); };
 
         // validar compra #2
@@ -733,7 +733,7 @@ impl RustaceoLibre {
     /// 
     /// Dará error si el usuario no está registrado como comprador o no tiene compras
     pub fn _ver_compras(&self, caller: AccountId) -> Result<Vec<Pedido>, ErrorVerCompras> {
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(usuario) = self.usuarios.get(&caller)
         else { return Err(ErrorVerCompras::UsuarioNoRegistrado) };
 
         if !usuario.es_comprador() {
@@ -795,7 +795,7 @@ impl RustaceoLibre {
     /// 
     /// Dará error si el usuario no está registrado como comprador o no tiene compras
     pub fn _ver_ventas(&self, caller: AccountId) -> Result<Vec<Pedido>, ErrorVerVentas> {
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(usuario) = self.usuarios.get(&caller)
         else { return Err(ErrorVerVentas::UsuarioNoRegistrado) };
 
         if !usuario.es_vendedor() {
@@ -997,7 +997,7 @@ mod tests {
         let id_publicacion = contrato._realizar_publicacion(vendedor, id_producto, 5, 100).unwrap();
 
         // Simular que el vendedor fue eliminado
-        contrato.usuarios.remove(vendedor);
+        contrato.usuarios.remove(&vendedor);
 
         // Comprar el producto
         let resultado = contrato._comprar_producto(0, comprador, id_publicacion, 2, 200);
@@ -1519,16 +1519,16 @@ mod tests {
 
         // Agregar la compra a la lista de ventas del vendedor
         {
-            let mut usuario_vendedor = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario_vendedor = contrato.usuarios.get(&vendedor).cloned().unwrap();
             assert!(usuario_vendedor.agregar_venta(id_compra));
-            contrato.usuarios.insert(vendedor, &usuario_vendedor);
+            contrato.usuarios.insert(vendedor, usuario_vendedor);
         }
 
         // Agregar la compra a la lista de compras del comprador (opcional, por coherencia)
         {
-            let mut usuario_comprador = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario_comprador = contrato.usuarios.get(&comprador).cloned().unwrap();
             assert!(usuario_comprador.agregar_compra(id_compra));
-            contrato.usuarios.insert(comprador, &usuario_comprador);
+            contrato.usuarios.insert(comprador, usuario_comprador);
         }
 
         // Nuevo timestamp para marcar como despachado
@@ -1625,15 +1625,15 @@ mod tests {
         contrato.pedidos.insert(id_compra, compra.clone());
 
         {
-            let mut usuario_vendedor = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario_vendedor = contrato.usuarios.get(&vendedor).cloned().unwrap();
             assert!(usuario_vendedor.agregar_venta(id_compra));
-            contrato.usuarios.insert(vendedor, &usuario_vendedor);
+            contrato.usuarios.insert(vendedor, usuario_vendedor);
         }
 
         {
-            let mut usuario_comprador = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario_comprador = contrato.usuarios.get(&comprador).cloned().unwrap();
             assert!(usuario_comprador.agregar_compra(id_compra));
-            contrato.usuarios.insert(comprador, &usuario_comprador);
+            contrato.usuarios.insert(comprador, usuario_comprador);
         }
 
         // Nuevo timestamp para marcar como despachado
@@ -1687,15 +1687,15 @@ mod tests {
         contrato.pedidos.insert(id_compra, compra.clone());
 
         {
-            let mut usuario_vendedor = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario_vendedor = contrato.usuarios.get(&vendedor).cloned().unwrap();
             assert!(usuario_vendedor.agregar_venta(id_compra));
-            contrato.usuarios.insert(vendedor, &usuario_vendedor);
+            contrato.usuarios.insert(vendedor, usuario_vendedor);
         }
 
         {
-            let mut usuario_comprador = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario_comprador = contrato.usuarios.get(&comprador).cloned().unwrap();
             assert!(usuario_comprador.agregar_compra(id_compra));
-            contrato.usuarios.insert(comprador, &usuario_comprador);
+            contrato.usuarios.insert(comprador, usuario_comprador);
         }
 
         // cancelar compra por parte del comprador
@@ -1858,9 +1858,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del usuario
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         let resultado = contrato._pedido_recibido(2000, comprador, id_compra);
@@ -1899,9 +1899,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del usuario
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         let resultado = contrato._pedido_recibido(2000, comprador, id_compra);
@@ -1940,9 +1940,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del usuario
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         let resultado = contrato._pedido_recibido(2000, comprador, id_compra);
@@ -1981,9 +1981,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador (solo del comprador)
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         // El vendedor intenta marcar como recibida (no debe poder)
@@ -2053,21 +2053,21 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
         // Agregar compra a la lista de ventas del vendedor
         {
-            let mut usuario = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario = contrato.usuarios.get(&vendedor).cloned().unwrap();
             usuario.agregar_venta(id_compra);
-            contrato.usuarios.insert(vendedor, &usuario);
+            contrato.usuarios.insert(vendedor, usuario);
         }
         // Agregar compra a la lista de compras del otro_usuario
         {
-            let mut usuario = contrato.usuarios.get(otro_usuario).unwrap();
+            let mut usuario = contrato.usuarios.get(&otro_usuario).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(otro_usuario, &usuario);
+            contrato.usuarios.insert(otro_usuario, usuario);
         }
 
         // El usuario que no participa intenta cancelar
@@ -2107,15 +2107,15 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
         // Agregar compra a la lista de ventas del vendedor
         {
-            let mut usuario = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario = contrato.usuarios.get(&vendedor).cloned().unwrap();
             usuario.agregar_venta(id_compra);
-            contrato.usuarios.insert(vendedor, &usuario);
+            contrato.usuarios.insert(vendedor, usuario);
         }
 
         // El comprador intenta cancelar una compra ya recibida
@@ -2155,15 +2155,15 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
         // Agregar compra a la lista de ventas del vendedor
         {
-            let mut usuario = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario = contrato.usuarios.get(&vendedor).cloned().unwrap();
             usuario.agregar_venta(id_compra);
-            contrato.usuarios.insert(vendedor, &usuario);
+            contrato.usuarios.insert(vendedor, usuario);
         }
 
         // El comprador intenta cancelar una compra ya cancelada
@@ -2239,9 +2239,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         let resultado = contrato._ver_compras(comprador);
@@ -2320,9 +2320,9 @@ mod tests {
 
         // Agregar compra a la lista de ventas del vendedor
         {
-            let mut usuario = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario = contrato.usuarios.get(&vendedor).cloned().unwrap();
             usuario.agregar_venta(id_compra);
-            contrato.usuarios.insert(vendedor, &usuario);
+            contrato.usuarios.insert(vendedor, usuario);
         }
 
         let resultado = contrato._ver_ventas(vendedor);
@@ -2363,9 +2363,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         // Buscar compras en estado Despachado (no hay ninguna)
@@ -2406,9 +2406,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         // Buscar compras en estado Pendiente (hay una)
@@ -2450,9 +2450,9 @@ mod tests {
 
         // Agregar compra a la lista de ventas del vendedor
         {
-            let mut usuario = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario = contrato.usuarios.get(&vendedor).cloned().unwrap();
             usuario.agregar_venta(id_compra);
-            contrato.usuarios.insert(vendedor, &usuario);
+            contrato.usuarios.insert(vendedor, usuario);
         }
 
         // Buscar ventas en estado Pendiente (hay una)
@@ -2504,9 +2504,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         // Buscar compras en categoría Tecnología (no hay ninguna)
@@ -2557,9 +2557,9 @@ mod tests {
 
         // Agregar compra a la lista de compras del comprador
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra);
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         // Buscar compras en categoría Tecnología (hay una)
@@ -2611,9 +2611,9 @@ mod tests {
 
         // Agregar compra a la lista de ventas del vendedor
         {
-            let mut usuario = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario = contrato.usuarios.get(&vendedor).cloned().unwrap();
             usuario.agregar_venta(id_compra);
-            contrato.usuarios.insert(vendedor, &usuario);
+            contrato.usuarios.insert(vendedor, usuario);
         }
 
         // Buscar ventas en categoría Hogar (hay una)
@@ -2665,9 +2665,9 @@ mod tests {
 
         // Agregar compra a la lista de ventas del vendedor
         {
-            let mut usuario = contrato.usuarios.get(vendedor).unwrap();
+            let mut usuario = contrato.usuarios.get(&vendedor).cloned().unwrap();
             usuario.agregar_venta(id_compra);
-            contrato.usuarios.insert(vendedor, &usuario);
+            contrato.usuarios.insert(vendedor, usuario);
         }
 
         // Buscar ventas en categoría Tecnología (no hay ninguna)
@@ -3058,9 +3058,9 @@ mod tests {
 
         // Usuario con otra compra
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(9999); // No es 1
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         // Compra con id 1 sí existe, pero no asociada al usuario
@@ -3094,9 +3094,9 @@ mod tests {
         contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
 
         {
-            let mut usuario = contrato.usuarios.get(comprador).unwrap();
+            let mut usuario = contrato.usuarios.get(&comprador).cloned().unwrap();
             usuario.agregar_compra(id_compra); // Está asociada
-            contrato.usuarios.insert(comprador, &usuario);
+            contrato.usuarios.insert(comprador, usuario);
         }
 
         // Pero NO insertamos la compra

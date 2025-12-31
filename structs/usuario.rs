@@ -491,20 +491,21 @@ impl RustaceoLibre {
     /// Registra un usuario en el Mapping de usuarios.
     /// 
     /// Devuelve error si el usuario ya existe.
-    pub fn _registrar_usuario(&mut self, caller: AccountId, rol: RolDeSeleccion) -> Result<(), ErrorRegistrarUsuario>  {
+    pub fn _registrar_usuario(&mut self, caller: AccountId, rol_seleccion: RolDeSeleccion) -> Result<(), ErrorRegistrarUsuario>  {
         // el usuario no puede ya existir
-        if self.usuarios.contains(caller) {
+        if self.usuarios.contains_key(&caller) {
             return Err(ErrorRegistrarUsuario::UsuarioYaExiste)
         }
 
-        let rol = match rol {
+        let rol = match rol_seleccion {
             RolDeSeleccion::Comprador => Rol::Comprador(DataComprador::default()),
             RolDeSeleccion::Vendedor => Rol::Vendedor(DataVendedor::default()),
             RolDeSeleccion::Ambos => Rol::Ambos(DataComprador::default(), DataVendedor::default())
         };
 
         let usuario = Usuario::new(caller, rol);
-        self.usuarios.insert(caller, &usuario); // por algún motivo es un préstamo, se supone que se clona.
+        self.usuarios.insert(caller, usuario.clone()); // por algún motivo es un préstamo, se supone que se clona.
+
         Ok(())
     }
 
@@ -513,7 +514,7 @@ impl RustaceoLibre {
     /// Devuelve error si el usuario no existe o ya posee el rol Ambos.
     pub fn _ascender_rol_usuario(&mut self, caller: AccountId) -> Result<(), ErrorAscenderRolUsuario> {
         // si no existe, es imposible modificar
-        let Some(usuario) = self.usuarios.get(caller)
+        let Some(usuario) = self.usuarios.get(&caller)
         else {
             return Err(ErrorAscenderRolUsuario::UsuarioInexistente);
         };
@@ -524,22 +525,35 @@ impl RustaceoLibre {
             _ => return Err(ErrorAscenderRolUsuario::MaximoRolAsignado),
         };
 
-        let mut usuario = usuario;
+        let mut usuario = usuario.clone();
         usuario.rol = nuevo_rol;
-        self.usuarios.insert(caller, &usuario);
+        self.usuarios.insert(caller, usuario);
 
         Ok(())
+    }
+
+    // Tendría más sentido una función que devuelva información de todas las órdenes de un usuario
+    // si tan solo se pudiese iterar sobre un Mapping.
+    /// ReportesView: Cantidad de ordenes
+    /// 
+    /// Devuelve la cantidad de compras que ha hecho el usuario como comprador.
+    /// Devolverá None si el usuario no existe o no está registrado como comprador.
+    pub fn _ver_cantidad_compras(&self, user: AccountId) -> Option<u128> {
+        let Some(user) = self.usuarios.get(&user)
+        else { return None; };
+
+        return Some(user.obtener_compras().iter().len() as u128);
     }
 
     /// Ver la calificación histórica promedio del usuario como comprador.
     /// 
     /// Devolverá None si no es comprador o no tiene calificaciones.
-    pub fn _ver_calificacion_comprador(&self, caller: AccountId) -> Option<u8> {
-        let Some(usuario) = self.usuarios.get(caller)
+    pub fn _ver_calificacion_comprador(&self, user: AccountId) -> Option<u8> {
+        let Some(usuario) = self.usuarios.get(&user)
         else { return None; };
 
         // obtener información de calificaciones
-        let (total_calificaciones, cant_calificaciones) = match usuario.rol {
+        let (total_calificaciones, cant_calificaciones) = match &usuario.rol {
             Rol::Comprador(data_comprador) => (data_comprador.total_calificaciones, data_comprador.cant_calificaciones),
             Rol::Vendedor(_) => return None,
             Rol::Ambos(data_comprador, _) => (data_comprador.total_calificaciones, data_comprador.cant_calificaciones),
@@ -559,12 +573,12 @@ impl RustaceoLibre {
     /// Ver la calificación histórica promedio del usuario como vendedor.
     /// 
     /// Devolverá None si no es vendedor o no tiene calificaciones.
-    pub fn _ver_calificacion_vendedor(&self, caller: AccountId) -> Option<u8> {
-        let Some(usuario) = self.usuarios.get(caller)
+    pub fn _ver_calificacion_vendedor(&self, user: AccountId) -> Option<u8> {
+        let Some(usuario) = self.usuarios.get(&user)
         else { return None; };
 
         // obtener información de calificaciones
-        let (total_calificaciones, cant_calificaciones) = match usuario.rol {
+        let (total_calificaciones, cant_calificaciones) = match &usuario.rol {
             Rol::Comprador(_) => return None,
             Rol::Vendedor(data_vendedor) => (data_vendedor.total_calificaciones, data_vendedor.cant_calificaciones),
             Rol::Ambos(_, data_vendedor) => (data_vendedor.total_calificaciones, data_vendedor.cant_calificaciones),
@@ -678,13 +692,13 @@ mod tests {
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
 
         // Agregar compra
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             assert!(usuario.agregar_compra(1001));
-            contrato.usuarios.insert(cuenta, &usuario);
+            contrato.usuarios.insert(cuenta, usuario);
         }
 
         // Confirmar que la compra se agregó
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             assert_eq!(usuario.obtener_compras(), Some(vec![1001]));
         }
     }
@@ -698,13 +712,13 @@ mod tests {
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         // Agregar venta
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             assert!(usuario.agregar_venta(2001));
-            contrato.usuarios.insert(cuenta, &usuario);
+            contrato.usuarios.insert(cuenta, usuario);
         }
 
         // Confirmar venta agregada
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             assert_eq!(usuario.obtener_ventas(), Some(vec![2001]));
         }
     }
@@ -718,13 +732,13 @@ mod tests {
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         // Agregar publicacion
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             assert!(usuario.agregar_publicacion(3001));
-            contrato.usuarios.insert(cuenta, &usuario);
+            contrato.usuarios.insert(cuenta, usuario);
         }
 
         // Confirmar publicacion agregada
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             assert_eq!(usuario.obtener_publicaciones(), Some(vec![3001]));
         }
     }
@@ -738,15 +752,15 @@ mod tests {
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
         // Establecer stock producto
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             let id_producto = 4001u128;
             let stock = 50u32;
             assert!(usuario.establecer_stock_producto(&id_producto, &stock));
-            contrato.usuarios.insert(cuenta, &usuario);
+            contrato.usuarios.insert(cuenta, usuario);
         }
 
         // Confirmar stock modificado
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             assert_eq!(usuario.obtener_stock_producto(&4001u128), Some(50));
         }
     }
@@ -759,13 +773,13 @@ mod tests {
         // Registrar comprador
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
 
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             assert!(usuario.calificar_como_comprador(5));
-            contrato.usuarios.insert(cuenta, &usuario);
+            contrato.usuarios.insert(cuenta, usuario);
         }
 
         // Confirmar calificacion
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             let data = usuario.obtener_data_comprador().unwrap();
             assert_eq!(data.total_calificaciones, 5);
             assert_eq!(data.cant_calificaciones, 1);
@@ -780,7 +794,7 @@ mod tests {
         // Registrar comprador
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Comprador).is_ok());
 
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             // Calificacion invalida (0)
             assert_eq!(usuario.calificar_como_comprador(0), false);
             // Calificacion invalida (6)
@@ -796,13 +810,13 @@ mod tests {
         // Registrar vendedor
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             assert!(usuario.calificar_como_vendedor(4));
-            contrato.usuarios.insert(cuenta, &usuario);
+            contrato.usuarios.insert(cuenta, usuario);
         }
 
         // Confirmar calificacion
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             let data = usuario.obtener_data_vendedor().unwrap();
             assert_eq!(data.total_calificaciones, 4);
             assert_eq!(data.cant_calificaciones, 1);
@@ -817,7 +831,7 @@ mod tests {
         // Registrar vendedor
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             // Calificacion invalida (0)
             assert_eq!(usuario.calificar_como_vendedor(0), false);
             // Calificacion invalida (6)
@@ -833,7 +847,7 @@ mod tests {
 
         // Registrar usuario vendedor
         let usuario = Usuario::new(cuenta, Rol::Vendedor(DataVendedor::default()));
-        contrato.usuarios.insert(cuenta, &usuario);
+        contrato.usuarios.insert(cuenta, usuario);
 
         assert_eq!(contrato._ver_calificacion_comprador(cuenta), None);
     }
@@ -846,7 +860,7 @@ mod tests {
 
         // Registrar usuario comprador
         let usuario = Usuario::new(cuenta, Rol::Comprador(DataComprador::default()));
-        contrato.usuarios.insert(cuenta, &usuario);
+        contrato.usuarios.insert(cuenta, usuario);
 
         assert_eq!(contrato._ver_calificacion_vendedor(cuenta), None);
     }
@@ -1057,7 +1071,7 @@ mod tests {
         let cuenta = AccountId::from([0x30; 32]);
 
         let comprador = Usuario::new(cuenta, Rol::Comprador(DataComprador::default()));
-        contrato.usuarios.insert(cuenta, &comprador);
+        contrato.usuarios.insert(cuenta, comprador);
 
         assert_eq!(contrato._ver_calificacion_comprador(cuenta), None);
     }
@@ -1068,7 +1082,7 @@ mod tests {
         let cuenta = AccountId::from([0x31; 32]);
 
         let vendedor = Usuario::new(cuenta, Rol::Vendedor(DataVendedor::default()));
-        contrato.usuarios.insert(cuenta, &vendedor);
+        contrato.usuarios.insert(cuenta, vendedor);
 
         assert_eq!(contrato._ver_calificacion_vendedor(cuenta), None);
     }
@@ -1080,13 +1094,13 @@ mod tests {
 
         assert!(contrato._registrar_usuario(cuenta, RolDeSeleccion::Vendedor).is_ok());
 
-        if let Some(mut usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(mut usuario) = contrato.usuarios.get(&cuenta).cloned() {
             usuario.establecer_stock_producto(&123, &10);
             usuario.establecer_stock_producto(&123, &20);
-            contrato.usuarios.insert(cuenta, &usuario);
+            contrato.usuarios.insert(cuenta, usuario);
         }
 
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             assert_eq!(usuario.obtener_stock_producto(&123), Some(20));
             let stock = usuario.obtener_stock_productos().unwrap();
             assert_eq!(stock.productos.len(), 1); // no se duplicó
@@ -1103,7 +1117,7 @@ mod tests {
         let resultado = contrato._ascender_rol_usuario(cuenta);
         assert_eq!(resultado, Ok(()));
 
-        if let Some(usuario) = contrato.usuarios.get(cuenta) {
+        if let Some(usuario) = contrato.usuarios.get(&cuenta) {
             assert!(usuario.es_comprador());
             assert!(usuario.es_vendedor());
         }
@@ -1209,7 +1223,7 @@ mod tests {
         let cuenta = AccountId::from([0x58; 32]);
 
         let usuario = Usuario::new(cuenta, Rol::Vendedor(DataVendedor::default()));
-        contrato.usuarios.insert(cuenta, &usuario);
+        contrato.usuarios.insert(cuenta, usuario);
 
         assert_eq!(contrato._ver_calificacion_vendedor(cuenta), None);
     }
