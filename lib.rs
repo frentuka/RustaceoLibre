@@ -9,7 +9,6 @@ pub mod rustaceo_libre {
         prelude::vec::Vec,
         prelude::string::String,
         prelude::collections::BTreeMap,
-        storage::Mapping,
     };
 
     //
@@ -214,6 +213,7 @@ pub mod rustaceo_libre {
                 }
             }).collect()
         }
+
 
         #[ink(message)]
         pub fn ver_cantidad_compras(&self, user: AccountId) -> Option<u128> {
@@ -506,16 +506,16 @@ pub mod rustaceo_libre {
         /// 
         /// Devolverá None si no es comprador o no tiene calificaciones.
         #[ink(message)]
-        pub fn ver_calificacion_comprador(&self) -> Option<u8> {
-            self._ver_calificacion_comprador(self.env().caller())
+        pub fn ver_calificacion_comprador(&self, user: AccountId) -> Option<u8> {
+            self._ver_calificacion_comprador(user)
         }
 
         /// Ver la calificación histórica promedio del usuario como vendedor.
         /// 
         /// Devolverá None si no es vendedor o no tiene calificaciones.
         #[ink(message)]
-        pub fn ver_calificacion_vendedor(&self) -> Option<u8> {
-            self._ver_calificacion_vendedor(self.env().caller())
+        pub fn ver_calificacion_vendedor(&self, user: AccountId) -> Option<u8> {
+            self._ver_calificacion_vendedor(user)
         }
 
         //
