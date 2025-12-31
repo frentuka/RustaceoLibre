@@ -1,6 +1,5 @@
 use ink::{prelude::string::String, primitives::AccountId};
 
-
 use crate::{rustaceo_libre::RustaceoLibre, structs::usuario::StockProductos};
 
 //

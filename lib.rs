@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
-mod structs;
+pub mod structs;
 
 #[allow(non_local_definitions)] // error molesto
 #[ink::contract]
