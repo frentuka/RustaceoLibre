@@ -322,6 +322,12 @@ pub mod rustaceo_libre {
         pub fn ver_stock_propio(&self) -> Result<StockProductos, ErrorVerStockPropio> {
             self._ver_stock_propio(self.env().caller())
         }
+
+        /// Devuelve la cantidad de ventas que ese producto haya tenido
+        #[ink(message)]
+        pub fn ver_ventas_producto(&self, id: u128) -> Option<u128> {
+            self._ver_ventas_producto(id)
+        }
         
         //
         // pedido.rs: administrar compras    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

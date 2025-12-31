@@ -243,6 +243,16 @@ impl RustaceoLibre {
         Ok(stock_productos)
     }
 
+    //
+
+    /// Devuelve la cantidad de ventas que ese producto haya tenido
+    pub(crate) fn _ver_ventas_producto(&self, id: u128) -> Option<u128> {
+        let Some(producto) = self.productos.get(&id)
+        else { return None; };
+
+        Some(producto.ventas)
+    }
+
 }
 
 

@@ -289,7 +289,21 @@ impl RustaceoLibre {
         // todo bien
         //
 
-        // primer modificación
+        //
+        // actualizar ventas del producto
+        //
+
+        if let Some(mut producto) = self.productos.get(&publicacion.producto).cloned() {
+            if let Some(nueva_cant_ventas) = producto.ventas.checked_add(1) {
+                producto.ventas = nueva_cant_ventas;
+                self.productos.insert(publicacion.producto, producto);
+            }
+        }
+
+        //
+        // actualizar stock publicación
+        //
+
         let mut publicacion = publicacion;
         publicacion.cantidad_ofertada = nuevo_stock_publicacion;
         self.publicaciones.insert(id_publicacion,publicacion);
@@ -665,6 +679,15 @@ impl RustaceoLibre {
         if politica_cancelacion_unilateral(timestamp, pedido, caller) {
             // modificar publicación: devolver stock
             if let Some(mut publicacion) = self.publicaciones.get(&pedido.publicacion).cloned() {
+                // modificar pedido: quitar venta
+                if let Some(mut producto) = self.productos.get(&publicacion.producto).cloned() {
+                    if let Some(nueva_cant_ventas) = producto.ventas.checked_sub(1) {
+                        producto.ventas = nueva_cant_ventas;
+                        self.productos.insert(publicacion.producto, producto);
+                    }
+                }
+
+                // devolver stock
                 if let Some(nueva_cantidad_ofertada) = publicacion.cantidad_ofertada.checked_add(pedido.cantidad_comprada) {
                     // modificar e insertar publicación con nueva cantidad ofertada
                     publicacion.cantidad_ofertada = nueva_cantidad_ofertada;
@@ -711,6 +734,15 @@ impl RustaceoLibre {
 
         // modificar publicación: devolver stock
         if let Some(mut publicacion) = self.publicaciones.get(&pedido.publicacion).cloned() {
+            // modificar pedido: quitar venta
+            if let Some(mut producto) = self.productos.get(&publicacion.producto).cloned() {
+                if let Some(nueva_cant_ventas) = producto.ventas.checked_add(1) {
+                    producto.ventas = nueva_cant_ventas;
+                    self.productos.insert(publicacion.producto, producto);
+                }
+            }
+
+            // devolver stock
             if let Some(nueva_cantidad_ofertada) = publicacion.cantidad_ofertada.checked_add(pedido.cantidad_comprada) {
                 // modificar e insertar publicación con nueva cantidad ofertada
                 publicacion.cantidad_ofertada = nueva_cantidad_ofertada;

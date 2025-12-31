@@ -1,6 +1,6 @@
 use ink::{prelude::string::String, primitives::AccountId};
 
-use crate::rustaceo_libre::RustaceoLibre;
+use crate::{rustaceo_libre::RustaceoLibre, structs::pedido::EstadoPedido};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
