@@ -33,5 +33,5 @@ e2e-tests = []
 
 [patch.crates-io]
 time = { git = "https://github.com/time-rs/time", tag = "v0.3.40" }
-cxx = { git = "https://github.com/dtolnay/cxx", tag = "1.0.177" }
-cxx-build = { git = "https://github.com/dtolnay/cxx", tag = "1.0.177" }
+# cxx = { git = "https://github.com/dtolnay/cxx", tag = "1.0.177" }
+# cxx-build = { git = "https://github.com/dtolnay/cxx", tag = "1.0.177" }

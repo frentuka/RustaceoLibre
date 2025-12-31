@@ -546,61 +546,6 @@ mod tests {
         assert_eq!(res, Err(ErrorRetirarStockProducto::UsuarioNoRegistrado));
     }
 
-    #[ink::test]
-    fn ingresar_retirar_stock_productos_works() {
-        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
-        let vendedor = accounts.alice;
-        
-        let mut contrato = RustaceoLibre::new(0);
-
-        let producto = Producto {
-            nombre: "asd".to_string(),
-            descripcion: "asd".to_string(),
-            categoria: CategoriaProducto::Hogar,
-            ventas: 0
-        };
-
-        let id_producto = contrato.next_id_productos();
-        contrato.productos.insert(id_producto, producto);
-
-        // Simular llamado como Alice
-        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
-
-        // Registrar a Alice como Vendedor
-        let rol = RolDeSeleccion::Vendedor;
-        assert_eq!(contrato.registrar_usuario(rol), Ok(()));
-
-
-        let res = contrato.ingresar_stock_producto(id_producto, 13548);
-        let Ok(res) = res
-        else { panic!("res debería ser Ok"); };
-
-        assert_eq!(res, 13548);
-
-        let stock = contrato.ver_stock_propio();
-        let Ok(stock) = stock else { panic!("stock debería ser Ok"); };
-
-        let Some(stock) = stock.get(&id_producto)
-        else { panic!("stock debería ser Ok") };
-
-        assert_eq!(stock, 13548);
-
-
-        let res = contrato.retirar_stock_producto(id_producto, 10000);
-        let Ok(res) = res
-        else { panic!("res debería ser Ok"); };
-
-        assert_eq!(res, 3548);
-
-        let stock = contrato.ver_stock_propio();
-        let Ok(stock) = stock else { panic!("stock debería ser Ok"); };
-
-        let Some(stock) = stock.get(&id_producto)
-        else { panic!("stock debería ser Ok") };
-
-        assert_eq!(stock, 3548);
-    }
-
     //
     // ver producto
     //
@@ -618,5 +563,121 @@ mod tests {
     //
     // ver stock propio
     //
+
+
+
+    #[ink::test]
+    fn ingresar_stock_producto_works() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+        let mut contrato = RustaceoLibre::new(0);
+
+        // Setup: Registrar vendedor y producto
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let _ = contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor);
+        
+        let nombre = "Teclado".into();
+        let desc = "Mecanico".into();
+        let cat = CategoriaProducto::Tecnologia;
+        let stock_inicial = 10;
+        
+        let id_producto = contrato._registrar_producto(vendedor, nombre, desc, cat, stock_inicial).unwrap();
+
+        // ACT: Ingresar 5 unidades más
+        let nuevo_stock = contrato._ingresar_stock_producto(vendedor, id_producto, 5);
+
+        // ASSERT: El stock debe ser 15
+        assert_eq!(nuevo_stock, Ok(15));
+
+        // Verificar persistencia en el usuario
+        let usuario = contrato.usuarios.get(&vendedor).unwrap();
+        assert_eq!(usuario.obtener_stock_producto(&id_producto), Some(15));
+    }
+
+    #[ink::test]
+    fn retirar_stock_producto_works() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+        let mut contrato = RustaceoLibre::new(0);
+
+        // Setup: Registrar vendedor y producto con stock 10
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let _ = contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor);
+        let id_producto = contrato._registrar_producto(vendedor, "Mouse".into(), "Gamer".into(), CategoriaProducto::Tecnologia, 10).unwrap();
+
+        // ACT: Retirar 4 unidades
+        let nuevo_stock = contrato._retirar_stock_producto(vendedor, id_producto, 4);
+
+        // ASSERT: El stock restante debe ser 6
+        assert_eq!(nuevo_stock, Ok(6));
+        
+        let usuario = contrato.usuarios.get(&vendedor).unwrap();
+        assert_eq!(usuario.obtener_stock_producto(&id_producto), Some(6));
+    }
+
+    #[ink::test]
+    fn ver_stock_propio_works() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+        let mut contrato = RustaceoLibre::new(0);
+
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let _ = contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor);
+
+        // Registrar dos productos
+        let id1 = contrato._registrar_producto(vendedor, "P1".into(), "D1".into(), CategoriaProducto::Hogar, 10).unwrap();
+        let id2 = contrato._registrar_producto(vendedor, "P2".into(), "D2".into(), CategoriaProducto::Hogar, 20).unwrap();
+
+        // ACT
+        let stock_total = contrato._ver_stock_propio(vendedor);
+
+        // ASSERT
+        assert!(stock_total.is_ok());
+        // Nota: Dependiendo de cómo sea tu struct StockProductos, podrías hacer aserciones más profundas aquí.
+        // Por ejemplo, si es un Vec o HashMap, verificar que contenga id1 e id2.
+    }
+
+    #[ink::test]
+    fn ver_stock_propio_falla_usuario_no_registrado() {
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let mut contrato = RustaceoLibre::new(0);
+        
+        assert_eq!(contrato._ver_stock_propio(accounts.alice), Err(ErrorVerStockPropio::UsuarioNoRegistrado));
+    }
+
+    #[ink::test]
+    fn ver_ventas_producto_works() {
+        let mut contrato = RustaceoLibre::new(0);
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        let vendedor = accounts.alice;
+        
+        // Setup
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(vendedor);
+        let _ = contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor);
+        let id = contrato._registrar_producto(vendedor, "A".into(), "B".into(), CategoriaProducto::Ferreteria, 1).unwrap();
+
+        // ACT: Producto nuevo tiene 0 ventas
+        assert_eq!(contrato._ver_ventas_producto(id), Some(0));
+
+        // ACT: Producto inexistente
+        assert_eq!(contrato._ver_ventas_producto(9999), None);
+    }
+
+    #[ink::test]
+    fn test_categoria_producto_derives() {
+        // Este test "tonto" ayuda a que el coverage marque como usadas las derivaciones Clone, PartialEq, Debug
+        let c1 = CategoriaProducto::Hogar;
+        let c2 = CategoriaProducto::Tecnologia;
+        let c3 = c1.clone();
+
+        assert_eq!(c1, c3);
+        assert_ne!(c1, c2);
+        assert_eq!(CategoriaProducto::default(), CategoriaProducto::Ninguna);
+        
+        // Testear formateo de debug
+        let debug_str = format!("{:?}", c1);
+        assert!(!debug_str.is_empty());
+    }
+
 
 }

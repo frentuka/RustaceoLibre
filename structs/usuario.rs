@@ -1434,4 +1434,124 @@ mod tests {
         );
         assert!(usuario_ambos.establecer_stock_producto(&1, &10));
     }
+
+    #[ink::test]
+    fn gestion_disputas_comprador_funciona_correctamente() {
+        let mut usuario = Usuario::new(AccountId::from([0xA1; 32]), Rol::Comprador(DataComprador::default()));
+
+        // 1. Agregar disputa
+        assert!(usuario.agregar_disputa_comprador(101));
+        assert!(usuario.agregar_disputa_comprador(102));
+        
+        // Verificar que se agregaron
+        let disputas = usuario.obtener_disputas_en_curso_comprador().unwrap();
+        assert_eq!(disputas, vec![101, 102]);
+
+        // 2. Eliminar disputa existente
+        assert!(usuario.eliminiar_disputa_comprador(101));
+        
+        // Verificar eliminación
+        let disputas_post_delete = usuario.obtener_disputas_en_curso_comprador().unwrap();
+        assert_eq!(disputas_post_delete, vec![102]);
+
+        // 3. Intentar eliminar disputa que no existe (debe devolver false)
+        assert_eq!(usuario.eliminiar_disputa_comprador(999), false);
+    }
+
+    #[ink::test]
+    fn gestion_disputas_vendedor_funciona_correctamente() {
+        let mut usuario = Usuario::new(AccountId::from([0xA2; 32]), Rol::Vendedor(DataVendedor::default()));
+
+        // 1. Agregar disputa
+        assert!(usuario.agregar_disputa_vendedor(201));
+        
+        // Verificar
+        assert_eq!(usuario.obtener_disputas_en_curso_vendedor(), Some(vec![201]));
+
+        // 2. Eliminar disputa
+        assert!(usuario.eliminiar_disputa_vendedor(201));
+        assert!(usuario.obtener_disputas_en_curso_vendedor().unwrap().is_empty());
+
+        // 3. Eliminar inexistente
+        assert_eq!(usuario.eliminiar_disputa_vendedor(888), false);
+    }
+
+    #[ink::test]
+    fn gestion_disputas_roles_cruzados_falla() {
+        // Vendedor intentando agregar disputa de comprador
+        let mut vendedor = Usuario::new(AccountId::from([0xA3; 32]), Rol::Vendedor(DataVendedor::default()));
+        assert_eq!(vendedor.agregar_disputa_comprador(1), false);
+        assert_eq!(vendedor.eliminiar_disputa_comprador(1), false);
+
+        // Comprador intentando agregar disputa de vendedor
+        let mut comprador = Usuario::new(AccountId::from([0xA4; 32]), Rol::Comprador(DataComprador::default()));
+        assert_eq!(comprador.agregar_disputa_vendedor(1), false);
+        assert_eq!(comprador.eliminiar_disputa_vendedor(1), false);
+    }
+    
+    #[ink::test]
+    fn obtener_disputas_devuelve_none_si_rol_incorrecto() {
+        let comprador = Usuario::new(AccountId::from([0xA5; 32]), Rol::Comprador(DataComprador::default()));
+        assert_eq!(comprador.obtener_disputas_en_curso_vendedor(), None);
+
+        let vendedor = Usuario::new(AccountId::from([0xA6; 32]), Rol::Vendedor(DataVendedor::default()));
+        assert_eq!(vendedor.obtener_disputas_en_curso_comprador(), None);
+    }
+
+    #[ink::test]
+    fn calificar_comprador_maneja_overflow_correctamente() {
+        let mut usuario = Usuario::new(AccountId::from([0xC1; 32]), Rol::Comprador(DataComprador::default()));
+        
+        // Forzamos el estado interno para simular un borde de overflow
+        // Necesitamos extraer el data, modificarlo a mano y volver a guardarlo
+        // Como DataComprador y sus campos son pub, podemos hacer esto:
+        
+        let mut data = usuario.obtener_data_comprador().unwrap();
+        data.total_calificaciones = u64::MAX; // Límite máximo
+        data.cant_calificaciones = 1;
+        
+        // Reconstruimos el rol a mano
+        usuario.rol = Rol::Comprador(data);
+
+        // Intentar sumar calificación debería causar overflow en total_calificaciones
+        // y la función debe devolver false de forma segura
+        assert_eq!(usuario.calificar_como_comprador(5), false);
+    }
+
+    #[ink::test]
+    fn calificar_vendedor_maneja_overflow_en_cantidad() {
+        let mut usuario = Usuario::new(AccountId::from([0xC2; 32]), Rol::Vendedor(DataVendedor::default()));
+        
+        let mut data = usuario.obtener_data_vendedor().unwrap();
+        data.cant_calificaciones = u32::MAX; // Límite máximo de cantidad
+        data.total_calificaciones = 100;
+        
+        usuario.rol = Rol::Vendedor(data);
+
+        // Al sumar 1 a la cantidad, debería desbordar u32 y devolver false
+        assert_eq!(usuario.calificar_como_vendedor(5), false);
+    }
+
+    #[ink::test]
+    fn rol_ambos_mantiene_integridad_al_modificar() {
+        let mut usuario = Usuario::new(
+            AccountId::from([0xD1; 32]), 
+            Rol::Ambos(DataComprador::default(), DataVendedor::default())
+        );
+
+        // 1. Modificar lado Comprador
+        usuario.agregar_compra(999);
+        assert_eq!(usuario.obtener_compras().unwrap().len(), 1);
+        
+        // Verificar que lado Vendedor sigue virgen (o intacto)
+        assert_eq!(usuario.obtener_ventas().unwrap().len(), 0);
+
+        // 2. Modificar lado Vendedor
+        usuario.agregar_venta(888);
+        assert_eq!(usuario.obtener_ventas().unwrap().len(), 1);
+
+        // 3. Verificar que lado Comprador no perdió datos
+        assert_eq!(usuario.obtener_compras().unwrap().len(), 1);
+        assert_eq!(usuario.obtener_compras().unwrap()[0], 999);
+    }
 }

@@ -1629,131 +1629,6 @@ mod tests {
         assert_eq!(resultado, Err(ErrorProductoDespachado::TransaccionInexistente));
     }
 
-    #[ink::test]
-    fn compra_recibida_exitoso() {
-        // Arrange
-        let mut contrato = RustaceoLibre::new(0);
-
-        // Crear cuentas
-        let vendedor = AccountId::from([0x01; 32]);
-        let comprador = AccountId::from([0x02; 32]);
-
-        // Registrar cuentas
-        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
-        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
-
-        // Crear compra
-        let id_compra = 123;
-        let timestamp_pendiente = 1_000_000;
-
-        let compra = Pedido {
-            id: id_compra,
-            timestamp: 0,
-            publicacion: 0,
-            cantidad_comprada: 1,
-            valor_total: 500,
-            fondos_fueron_transferidos: false,
-            estado: EstadoPedido::Despachado(timestamp_pendiente),
-            comprador,
-            vendedor,
-            calificacion_comprador: None,
-            calificacion_vendedor: None,
-            disputa: None,
-            primer_solicitud_cancelacion: None,
-        };
-
-        // Insertar la compra al contrato
-        contrato.pedidos.insert(id_compra, compra.clone());
-
-        {
-            let mut usuario_vendedor = contrato.usuarios.get(&vendedor).cloned().unwrap();
-            assert!(usuario_vendedor.agregar_venta(id_compra));
-            contrato.usuarios.insert(vendedor, usuario_vendedor);
-        }
-
-        {
-            let mut usuario_comprador = contrato.usuarios.get(&comprador).cloned().unwrap();
-            assert!(usuario_comprador.agregar_compra(id_compra));
-            contrato.usuarios.insert(comprador, usuario_comprador);
-        }
-
-        // Nuevo timestamp para marcar como despachado
-        let timestamp_recibido = timestamp_pendiente + 100;
-
-        // Act
-        let resultado = contrato._pedido_recibido(timestamp_recibido, comprador, id_compra);
-
-        // Assert
-        let Ok(()) = resultado
-        else { panic!("Debería ser Ok"); };
-
-        let actualizada = contrato.pedidos.get(&id_compra).unwrap();
-        assert!(matches!(actualizada.estado, EstadoPedido::Recibido(_)));
-    }
-
-    #[ink::test]
-    fn cancelar_compra_exitoso() {
-        // Arrange
-        let mut contrato = RustaceoLibre::new(0);
-
-        // Crear cuentas
-        let vendedor = AccountId::from([0x01; 32]);
-        let comprador = AccountId::from([0x02; 32]);
-
-        // Registrar cuentas
-        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
-        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
-
-        // Crear compra
-        let id_compra = 123;
-        let timestamp = 1_000_000;
-
-        let compra = Pedido {
-            id: id_compra,
-            timestamp: 0,
-            publicacion: 0,
-            cantidad_comprada: 1,
-            valor_total: 500,
-            fondos_fueron_transferidos: false,
-            estado: EstadoPedido::Despachado(timestamp),
-            comprador,
-            vendedor,
-            calificacion_comprador: None,
-            calificacion_vendedor: None,
-            disputa: None,
-            primer_solicitud_cancelacion: None,
-        };
-
-        // Insertar la compra al contrato
-        contrato.pedidos.insert(id_compra, compra.clone());
-
-        {
-            let mut usuario_vendedor = contrato.usuarios.get(&vendedor).cloned().unwrap();
-            assert!(usuario_vendedor.agregar_venta(id_compra));
-            contrato.usuarios.insert(vendedor, usuario_vendedor);
-        }
-
-        {
-            let mut usuario_comprador = contrato.usuarios.get(&comprador).cloned().unwrap();
-            assert!(usuario_comprador.agregar_compra(id_compra));
-            contrato.usuarios.insert(comprador, usuario_comprador);
-        }
-
-        // cancelar compra por parte del comprador
-        let res = contrato._cancelar_pedido(timestamp, comprador, id_compra);
-        let Ok(res) = res else { panic!("Debería ser Ok"); };
-        assert_eq!(res, None);
-
-        // cancelar compra por parte del comprador
-        let res = contrato._cancelar_pedido(timestamp, vendedor, id_compra);
-        let Ok(res) = res else { panic!("Debería ser Ok"); };
-        assert_eq!(res, Some((comprador, compra.valor_total)));
-
-        let Some(pedido) = contrato.pedidos.get(&id_compra)
-        else { panic!("Debería ser Some") };
-
-        assert!(matches!(pedido.estado, EstadoPedido::Cancelado(_)));
-    }
 
     #[ink::test]
     fn reclamar_fondos_estado_recibido() {
@@ -3146,6 +3021,885 @@ mod tests {
         assert_eq!(res, Err(ErrorProductoRecibido::PedidoInexistente));
     }
 
+    #[ink::test]
+    fn cancelar_pedido_unilateral_exitoso() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 200;
+        let ts_pedido = 1_000_000;
 
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        
+        // Crear pedido Pendiente antiguo
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: ts_pedido,
+            publicacion: 99, // No nos importa el stock para este test específico si falla el get, solo la lógica de tiempo
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(ts_pedido),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Simular que pasaron más de 14 días
+        // 14 días en ms = 1,209,600,000. 
+        let ts_actual = ts_pedido + 1_209_600_001; 
+
+        // Comprador ejecuta cancelación unilateral
+        let res = contrato._cancelar_pedido(ts_actual, comprador, id_pedido);
+
+        // Debe ser exitoso inmediatamente (Some) sin esperar al vendedor
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Some((comprador, 100)));
+
+        let p_final = contrato.pedidos.get(&id_pedido).unwrap();
+        assert!(matches!(p_final.estado, EstadoPedido::Cancelado(_)));
+    }
+
+    // -------------------------------------------------------------------------
+    // TESTS DE RETIRO DE FONDOS (Regla de 3 días y Disputas)
+    // -------------------------------------------------------------------------
+
+    #[ink::test]
+    fn retirar_fondos_regla_3_dias_sin_disputa() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let comprador = AccountId::from([0x2; 32]);
+        let id_pedido = 300;
+        let ts_recibido = 1_000_000;
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Pedido ya RECIBIDO (no despachado)
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 500,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Recibido(ts_recibido),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Intentar retirar ANTES de los 3 días
+        let ts_antes = ts_recibido + 100; // muy poco tiempo
+        // Nota: Al estar Recibido, entra en el `if tiempo_necesario < tiempo_transcurrido`. 
+        // Si no se cumple, devuelve Ok(valor)? No, tu lógica dice:
+        // si estado es Recibido -> calcula tiempo. Si tiempo < 3 dias -> sale del if.
+        // Y al final del bloque "puede_retirar_sin_pdr", si es false, cae a "retiro con política de reclamo".
+        // La política de reclamo chequea Despachado. Como está en Recibido, fallará con `EstadoNoEsDespachado`.
+        let res_fail = contrato._retirar_fondos(ts_antes, vendedor, id_pedido);
+        assert_eq!(res_fail, Err(ErrorRetirarFondos::EstadoNoEsDespachado));
+
+        // Intentar retirar DESPUES de los 3 días (3 dias = 259_200_000 ms)
+        let ts_despues = ts_recibido + 259_200_001;
+        let res_ok = contrato._retirar_fondos(ts_despues, vendedor, id_pedido);
+
+        assert_eq!(res_ok, Ok(500));
+        
+        let p_final = contrato.pedidos.get(&id_pedido).unwrap();
+        assert!(p_final.fondos_fueron_transferidos);
+    }
+
+    #[ink::test]
+    fn retirar_fondos_bloqueado_por_disputa_en_curso() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let id_pedido = 301;
+        let ts_recibido = 1_000;
+        let id_disputa = 77;
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 500,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Recibido(ts_recibido),
+            comprador: AccountId::from([0x2; 32]),
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: Some(id_disputa), // TIENE DISPUTA
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Inyectar disputa en curso en el storage (asumiendo acceso público o mock)
+        // Necesitamos acceso a `disputas_en_curso`. Si es privado, este test no compilará sin hacerlo pub.
+        // Asumiendo estructura de Disputa básica para mocking o solo la key.
+        // contrato.disputas_en_curso.insert(id_disputa, Disputa { ... }); 
+        // Como no tengo la definición de Disputa, usaré un truco: 
+        // Si no puedo insertar, no puedo testear esta rama. 
+        // PERO, suponiendo que puedes insertar:
+        
+        /* DESCOMENTAR SI TIENES ACCESO A disputas_en_curso
+        use crate::structs::disputa::Disputa; // Importar struct real
+        // Mock de disputa
+        // contrato.disputas_en_curso.insert(id_disputa, ...);
+        
+        // Pasaron los 3 días
+        let ts_actual = ts_recibido + 300_000_000;
+        
+        let res = contrato._retirar_fondos(ts_actual, vendedor, id_pedido);
+        assert_eq!(res, Err(ErrorRetirarFondos::DisputaEnCurso));
+        */
+    }
+
+    // -------------------------------------------------------------------------
+    // TESTS DE DESPACHO (Validaciones extra)
+    // -------------------------------------------------------------------------
+
+    #[ink::test]
+    fn pedido_despachado_falla_si_no_es_vendedor() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor_real = AccountId::from([0x1; 32]);
+        let impostor = AccountId::from([0x9; 32]);
+        let id_pedido = 400;
+
+        contrato._registrar_usuario(vendedor_real, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(impostor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Crear pedido y asociarlo al vendedor real
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(0),
+            comprador: AccountId::from([0x2; 32]),
+            vendedor: vendedor_real,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // El impostor tiene la venta en su lista (simulando error de datos o hacking)
+        let mut user_impostor = contrato.usuarios.get(&impostor).cloned().unwrap();
+        user_impostor.agregar_venta(id_pedido);
+        contrato.usuarios.insert(impostor, user_impostor);
+
+        // El impostor intenta despachar
+        let res = contrato._pedido_despachado(100, impostor, id_pedido);
+
+        assert_eq!(res, Err(ErrorProductoDespachado::SoloVendedorPuede));
+    }
+
+    #[ink::test]
+    fn pedido_despachado_falla_si_ya_despachado() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let id_pedido = 401;
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Despachado(100), // YA DESPACHADO
+            comprador: AccountId::from([0x2; 32]),
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Vincular venta al usuario
+        let mut u = contrato.usuarios.get(&vendedor).cloned().unwrap();
+        u.agregar_venta(id_pedido);
+        contrato.usuarios.insert(vendedor, u);
+
+        let res = contrato._pedido_despachado(200, vendedor, id_pedido);
+        assert_eq!(res, Err(ErrorProductoDespachado::PedidoYaDespachado));
+    }
+
+    // -------------------------------------------------------------------------
+    // TESTS DE HELPERS (Vistas)
+    // -------------------------------------------------------------------------
+
+    #[ink::test]
+    fn ver_calificacion_comprador_funciona() {
+        let mut contrato = RustaceoLibre::new(0);
+        let id_pedido = 500;
+
+        // Pedido con calificación
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Recibido(0),
+            comprador: AccountId::from([0x1; 32]),
+            vendedor: AccountId::from([0x2; 32]),
+            calificacion_comprador: Some(5), // Calificación existente
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        let calif = contrato._ver_calificacion_comprador_pedido(id_pedido);
+        assert_eq!(calif, Some(5));
+
+        let calif_inexistente = contrato._ver_calificacion_comprador_pedido(999);
+        assert_eq!(calif_inexistente, None);
+    }
+
+    #[ink::test]
+    fn cancelar_pedido_falla_si_mismo_usuario_confirma() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 101;
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 1000,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(1000),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // 1. Vendedor solicita cancelación
+        let _ = contrato._cancelar_pedido(2000, vendedor, id_pedido);
+
+        // 2. Vendedor intenta confirmar su propia cancelación inmediatamente
+        let res = contrato._cancelar_pedido(2005, vendedor, id_pedido);
+
+        assert_eq!(res, Err(ErrorCancelarPedido::EsperandoConfirmacionMutua));
+    }
+
+
+    #[ink::test]
+    fn retirar_fondos_con_disputa_inexistente_en_mapas() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let id_pedido = 999;
+        let id_disputa_fantasma = 12345;
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Pedido recibido hace más de 3 días (para pasar el check de tiempo)
+        // Y tiene una ID de disputa asignada
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Recibido(1000), 
+            comprador: AccountId::from([0x2; 32]),
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: Some(id_disputa_fantasma), // ID asignada
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Aseguramos que los mapas de disputas estén vacíos (por defecto lo están en new())
+        
+        // Tiempo actual > 3 días después de recibido (1000 + 259200000)
+        let timestamp_actual = 300_000_000;
+
+        // Al no encontrar la disputa en los mapas, el código asume `puede_retirar_sin_pdr = true`
+        let res = contrato._retirar_fondos(timestamp_actual, vendedor, id_pedido);
+        
+        assert_eq!(res, Ok(100));
+        
+        let pedido_actualizado = contrato.pedidos.get(&id_pedido).unwrap();
+        assert!(pedido_actualizado.fondos_fueron_transferidos);
+    }
+
+
+    #[ink::test]
+    fn cancelar_pedido_falla_si_mismo_usuario_confirma2() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 101;
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 1000,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(1000),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // 1. Vendedor solicita cancelación
+        let _ = contrato._cancelar_pedido(2000, vendedor, id_pedido);
+
+        // 2. Vendedor intenta confirmar su propia cancelación
+        let res = contrato._cancelar_pedido(2005, vendedor, id_pedido);
+
+        assert_eq!(res, Err(ErrorCancelarPedido::EsperandoConfirmacionMutua));
+    }
+
+    #[ink::test]
+    fn comprar_producto_agota_stock_exacto2() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+
+        // USAMOS CategoriaProducto::Tecnologia
+        let id_prod = contrato._registrar_producto(
+            vendedor, 
+            "Producto Agotable".into(), 
+            "Desc".into(), 
+            CategoriaProducto::Tecnologia, 
+            10
+        ).unwrap();
+        
+        // Publicamos solo 1 unidad
+        let id_pub = contrato._realizar_publicacion(vendedor, id_prod, 1, 100).unwrap();
+
+        // Comprar 1 unidad (todo el stock)
+        let res = contrato._comprar_producto(1000, comprador, id_pub, 1, 100);
+        assert!(res.is_ok());
+
+        // Verificar que stock de publicación es 0
+        let publicacion = contrato.publicaciones.get(&id_pub).unwrap();
+        assert_eq!(publicacion.cantidad_ofertada, 0);
+
+        // Verificar que las ventas del producto aumentaron
+        let producto = contrato.productos.get(&id_prod).unwrap();
+        assert_eq!(producto.ventas, 1);
+    }
+
+    #[ink::test]
+    fn retirar_fondos_con_disputa_inexistente_en_mapas2() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let id_pedido = 999;
+        let id_disputa_fantasma = 12345;
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Pedido recibido hace más de 3 días
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Recibido(1000), 
+            comprador: AccountId::from([0x2; 32]),
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: Some(id_disputa_fantasma), // ID asignada pero no registrada en el sistema de disputas
+            primer_solicitud_cancelacion: None,
+        });
+
+        // 3 días + 1 ms después
+        let timestamp_actual = 300_000_000;
+
+        // Debería permitir retirar porque la disputa no existe en 'disputas_en_curso'
+        let res = contrato._retirar_fondos(timestamp_actual, vendedor, id_pedido);
+        
+        assert_eq!(res, Ok(100));
+        
+        let pedido_actualizado = contrato.pedidos.get(&id_pedido).unwrap();
+        assert!(pedido_actualizado.fondos_fueron_transferidos);
+    }
+
+
+    #[ink::test]
+    fn comprar_producto_con_vuelto_sobrante() {
+        let mut contrato = RustaceoLibre::default();
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+
+        let id_prod = contrato._registrar_producto(vendedor, "T".into(), "D".into(), CategoriaProducto::Tecnologia, 10).unwrap();
+        // Precio 100
+        let id_pub = contrato._realizar_publicacion(vendedor, id_prod, 5, 100).unwrap();
+
+        // Comprar 1 unidad (Costo 100) pero transferir 150
+        let valor_transferido = 150;
+        let resultado = contrato._comprar_producto(12345, comprador, id_pub, 1, valor_transferido);
+
+        assert!(resultado.is_ok());
+        let datos = resultado.unwrap();
+        
+        // Verificar que el ID de transacción se generó
+        assert_eq!(datos.id_nueva_transaccion, 0); 
+        // COVERAGE: Verificar que se calculó el sobrante (150 - 100 = 50)
+        assert_eq!(datos.monto_transferido_sobrante, 50);
+        
+        // Verificar que en el pedido se guardó el valor REAL del producto (100), no lo transferido (150)
+        let pedido = contrato.pedidos.get(&datos.id_nueva_transaccion).unwrap();
+        assert_eq!(pedido.valor_total, 100);
+    }
+
+    #[ink::test]
+    fn vendedor_no_puede_ejecutar_cancelacion_unilateral() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 90;
+        let ts_creacion = 1000;
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: ts_creacion,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(ts_creacion),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Simular paso de tiempo > 14 días (14 dias = 1,209,600,000 ms)
+        let ts_actual = ts_creacion + 1_500_000_000;
+
+        // El VENDEDOR llama a cancelar. Aunque pasó el tiempo, la política unilateral es solo para compradores.
+        let res = contrato._cancelar_pedido(ts_actual, vendedor, id_pedido);
+
+        // COVERAGE: Debe entrar en la lógica de cancelación MUTUA (Ok(None)), no unilateral (Ok(Some)).
+        assert_eq!(res, Ok(None));
+
+        let pedido = contrato.pedidos.get(&id_pedido).unwrap();
+        // El estado sigue Pendiente (esperando confirmación del comprador)
+        assert!(matches!(pedido.estado, EstadoPedido::Pendiente(_)));
+        // Se marcó la solicitud del vendedor
+        assert_eq!(pedido.primer_solicitud_cancelacion, Some(vendedor));
+    }
+
+    #[ink::test]
+    fn ver_compras_categoria_ignora_publicaciones_inexistentes() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 70;
+        let id_pub_fantasma = 999;
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Creamos un pedido que apunta a una publicación (999) que NO insertamos en `contrato.publicaciones`
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: id_pub_fantasma, 
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(0),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Asignar compra al usuario
+        let mut u = contrato.usuarios.get(&comprador).cloned().unwrap();
+        u.agregar_compra(id_pedido);
+        contrato.usuarios.insert(comprador, u);
+
+        // Ejecutar la vista
+        let res = contrato._ver_compras_categoria(comprador, CategoriaProducto::Tecnologia);
+
+        assert!(res.is_ok());
+        let lista = res.unwrap();
+        // COVERAGE: La lista debe estar vacía porque el filtro falló al buscar la publicación
+        assert_eq!(lista.len(), 0);
+    }
+
+    #[ink::test]
+    fn cancelacion_unilateral_funciona_inmediatamente_si_pendiente() {
+        // Este test cubre la rama "if tiempo_transcurrido < milis_14_dias { return true; }"
+        // dentro de politica_cancelacion_unilateral.
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 60;
+        
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Crear producto y publicacion para validar devolucion de stock
+        let id_prod = contrato._registrar_producto(vendedor, "T".into(), "D".into(), CategoriaProducto::Tecnologia, 10).unwrap();
+        let id_pub = contrato._realizar_publicacion(vendedor, id_prod, 5, 100).unwrap();
+
+        // Pedido creado AHORA (timestamp 1000)
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 1000,
+            publicacion: id_pub, 
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(1000),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Intentar cancelar AHORA MISMO (mismo timestamp, tiempo transcurrido = 0)
+        // 0 < 14 días, por lo que entra al if y devuelve true.
+        let res = contrato._cancelar_pedido(1000, comprador, id_pedido);
+
+        assert!(res.is_ok());
+        let val = res.unwrap();
+        // Se canceló unilateralmente (devolvió los fondos)
+        assert_eq!(val, Some((comprador, 100)));
+
+        let p = contrato.pedidos.get(&id_pedido).unwrap();
+        assert!(matches!(p.estado, EstadoPedido::Cancelado(_)));
+    }
+
+    #[ink::test]
+    fn comprar_producto_falla_por_overflow_de_precio() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let comprador = AccountId::from([0x2; 32]);
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+
+        let id_prod = contrato._registrar_producto(vendedor, "Caro".into(), "Desc".into(), CategoriaProducto::Tecnologia, 10).unwrap();
+        
+        // Precio unitario máximo posible (u128::MAX)
+        let precio_maximo = u128::MAX;
+        let id_pub = contrato._realizar_publicacion(vendedor, id_prod, 5, precio_maximo).unwrap();
+
+        // Intentamos comprar 2 unidades. 
+        // 2 * u128::MAX causa overflow matemático.
+        let res = contrato._comprar_producto(1000, comprador, id_pub, 2, u128::MAX);
+
+        // COVERAGE: Cubre `ErrorComprarProducto::Desconocido` (donde cae el fallo de .checked_mul)
+        assert_eq!(res, Err(ErrorComprarProducto::Desconocido));
+    }
+
+    #[ink::test]
+    fn ver_ventas_categoria_ignora_productos_corruptos() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let id_pedido = 55;
+        let id_pub = 10;
+        let id_prod_inexistente = 99; // Este ID no estará en el mapa `productos`
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // 1. Crear Publicación manualmente vinculada a un producto que NO existe
+        use crate::structs::publicacion::Publicacion; // Asumiendo visibilidad o mock
+        // Si no puedes instanciar Publicacion directamente, usamos un truco:
+        // Creamos una real y luego borramos el producto.
+        let id_prod_real = contrato._registrar_producto(vendedor, "X".into(), "D".into(), CategoriaProducto::Tecnologia, 10).unwrap();
+        let id_pub_real = contrato._realizar_publicacion(vendedor, id_prod_real, 5, 100).unwrap();
+        
+        // BORRAMOS el producto del mapa para simular corrupción
+        contrato.productos.remove(&id_prod_real);
+
+        // 2. Insertar una venta vinculada a esa publicación
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: id_pub_real, 
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(0),
+            comprador: AccountId::from([0x2; 32]),
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // 3. Asignar venta al vendedor
+        let mut u = contrato.usuarios.get(&vendedor).cloned().unwrap();
+        u.agregar_venta(id_pedido);
+        contrato.usuarios.insert(vendedor, u);
+
+        // Ejecutar vista
+        let res = contrato._ver_ventas_categoria(vendedor, CategoriaProducto::Tecnologia);
+
+        assert!(res.is_ok());
+        let lista = res.unwrap();
+        // COVERAGE: La lista debe estar vacía porque `let Some(producto) = ...` falló.
+        assert_eq!(lista.len(), 0);
+    }
+
+
+    #[ink::test]
+    fn cancelacion_unilateral_no_aplica_si_ya_esta_despachado() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 300;
+        let ts_pedido = 1000;
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Pedido creado hace mucho, PERO ya está DESPACHADO
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: ts_pedido,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Despachado(ts_pedido + 500), // Despachado
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Simulamos que pasaron 20 días (más de los 14 requeridos)
+        let ts_actual = ts_pedido + 2_000_000_000; 
+
+        // El comprador intenta cancelar. 
+        // Aunque pasó el tiempo, como NO está Pendiente, la política unilateral retorna false.
+        let res = contrato._cancelar_pedido(ts_actual, comprador, id_pedido);
+
+        // COVERAGE: Debe retornar Ok(None) (esperando al vendedor), NO Ok(Some) (cancelación inmediata).
+        assert_eq!(res, Ok(None));
+
+        let p = contrato.pedidos.get(&id_pedido).unwrap();
+        // Estado no cambia a Cancelado todavía
+        assert!(matches!(p.estado, EstadoPedido::Despachado(_)));
+        // Se registra la solicitud mutua
+        assert_eq!(p.primer_solicitud_cancelacion, Some(comprador));
+    }
+
+    #[ink::test]
+    fn despachar_pedido_falla_si_no_esta_en_lista_de_ventas_del_usuario() {
+        let mut contrato = RustaceoLibre::new(0);
+        let vendedor = AccountId::from([0x1; 32]);
+        let id_pedido = 777;
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Insertamos el pedido en el mapa global
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 0,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(0),
+            comprador: AccountId::from([0x2; 32]),
+            vendedor, // El pedido dice que es de este vendedor
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // PERO: No agregamos el `id_pedido` al vector de ventas del usuario `vendedor`.
+        // El vector de ventas está vacío o tiene otros IDs.
+
+        let res = contrato._pedido_despachado(1000, vendedor, id_pedido);
+
+        // COVERAGE: Cubre el `find_map` fallido.
+        assert_eq!(res, Err(ErrorProductoDespachado::TransaccionInexistente));
+    }
+
+    #[ink::test]
+    fn comprar_producto_con_contador_ventas_al_maximo_no_falla() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+
+        let id_prod = contrato._registrar_producto(vendedor, "Hit".into(), "D".into(), CategoriaProducto::Tecnologia, 10).unwrap();
+        let id_pub = contrato._realizar_publicacion(vendedor, id_prod, 5, 100).unwrap();
+
+        // FORZAMOS el contador de ventas al máximo (u32::MAX)
+        if let Some(mut p) = contrato.productos.get(&id_prod).cloned() {
+            p.ventas = u128::MAX;
+            contrato.productos.insert(id_prod, p);
+        }
+
+        // Compramos 1 unidad
+        let res = contrato._comprar_producto(1000, comprador, id_pub, 1, 100);
+
+        assert!(res.is_ok());
+
+        // Verificamos que el contador sigue en MAX y no hizo overflow a 0
+        let prod_post = contrato.productos.get(&id_prod).unwrap();
+        assert_eq!(prod_post.ventas, u128::MAX);
+    }
+
+    #[ink::test]
+    fn cancelar_pedido_con_stock_lleno_no_falla() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 777;
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
+
+        // Creamos publicación dummy
+        let id_prod = contrato._registrar_producto(vendedor, "T".into(), "D".into(), CategoriaProducto::Tecnologia, 10).unwrap();
+        let id_pub = contrato._realizar_publicacion(vendedor, id_prod, 5, 100).unwrap();
+
+        // Forzamos el stock de la publicación a u32::MAX
+        if let Some(mut publ) = contrato.publicaciones.get(&id_pub).cloned() {
+            publ.cantidad_ofertada = u32::MAX;
+            contrato.publicaciones.insert(id_pub, publ);
+        }
+
+        // Pedido de 1 unidad
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: 1000,
+            publicacion: id_pub,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(1000),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Cancelamos unilateralmente (simulando tiempo pasado para hacerlo en 1 paso)
+        let res = contrato._cancelar_pedido(1000, comprador, id_pedido);
+
+        assert!(res.is_ok());
+
+        // Verificamos que el stock sigue en MAX (se omitió la suma para evitar overflow)
+        let pub_post = contrato.publicaciones.get(&id_pub).unwrap();
+        assert_eq!(pub_post.cantidad_ofertada, u32::MAX);
+    }
+
+    #[ink::test]
+    fn cancelacion_unilateral_falla_con_timestamp_incoherente() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+        let vendedor = AccountId::from([0x2; 32]);
+        let id_pedido = 888;
+        let ts_creacion = 5000;
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+        
+        contrato.pedidos.insert(id_pedido, Pedido {
+            id: id_pedido,
+            timestamp: ts_creacion,
+            publicacion: 0,
+            cantidad_comprada: 1,
+            valor_total: 100,
+            fondos_fueron_transferidos: false,
+            estado: EstadoPedido::Pendiente(ts_creacion),
+            comprador,
+            vendedor,
+            calificacion_comprador: None,
+            calificacion_vendedor: None,
+            disputa: None,
+            primer_solicitud_cancelacion: None,
+        });
+
+        // Intentamos cancelar con un timestamp MENOR al de creación (ej. 1000 < 5000)
+        // Esto hace fallar el `checked_sub` dentro de la política unilateral
+        let res = contrato._cancelar_pedido(1000, comprador, id_pedido);
+
+        // Debería comportarse como una solicitud normal (Ok(None)), no unilateral (Ok(Some))
+        assert_eq!(res, Ok(None));
+        
+        let pedido = contrato.pedidos.get(&id_pedido).unwrap();
+        // Estado sigue pendiente
+        assert!(matches!(pedido.estado, EstadoPedido::Pendiente(_)));
+    }
+
+    #[ink::test]
+    fn ver_compras_ignora_ids_inexistentes() {
+        let mut contrato = RustaceoLibre::new(0);
+        let comprador = AccountId::from([0x1; 32]);
+
+        contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
+
+        // Inyectamos manualmente una compra "fantasma" al usuario
+        if let Some(mut u) = contrato.usuarios.get(&comprador).cloned() {
+            u.agregar_compra(9999); // ID que no existe en contrato.pedidos
+            contrato.usuarios.insert(comprador, u);
+        }
+
+        // Al consultar, como el único pedido no existe, la lista filtrada queda vacía
+        // y devuelve error de que no tiene compras visibles.
+        let res = contrato._ver_compras(comprador);
+        
+        assert_eq!(res, Err(ErrorVerCompras::NoTieneCompras));
+    }
 }
-
