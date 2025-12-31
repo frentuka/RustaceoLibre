@@ -69,30 +69,24 @@ Una vez que un pedido se considera finalizado, ya sea por haber sido recibido o 
 
 En caso de que no pueda hacer un setup limpio del entorno, hemos encontrado la forma infalible de conseguir un entorno compatible.
 
-Primero lo primero, deshacerse de Rust:
-
-```bash
-  rustup self uninstall
-```
-
 Seguido de volver a instalarlo desde la página oficial: https://rustup.rs
 
 Instalar toolchain nightly-2024-06-20:
 
 ```bash
-  rustup component add rust-src --toolchain nightly-2024-06-20
+rustup component add rust-src --toolchain nightly-2024-06-20
 ```
 
 y Cargo Contract:
 
 ```bash
-  cargo install cargo-contract --version 4.1.3
+cargo install cargo-contract --version 4.1.3
 ```
 
-Si se desea utilizar Cargo Tarpaulin, la versión que recomendamos instalar es la 0.29.0, con el comando:
+Si se desea utilizar Cargo Tarpaulin, la versión que recomendamos instalar es la 0.32.8, con el comando:
 
 ```bash
-  cargo install cargo-tarpaulin --version 0.29.0 --locked
+cargo install cargo-tarpaulin --version 0.32.8 --locked
 ```
 
 # Autores

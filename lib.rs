@@ -25,7 +25,12 @@ mod rustaceo_libre {
     };
 
     use crate::structs::producto::{
-        CategoriaProducto, ErrorIngresarStockProducto, ErrorRegistrarProducto, ErrorRetirarStockProducto, ErrorVerStockPropio, Producto
+        Producto,
+        CategoriaProducto,
+        ErrorIngresarStockProducto,
+        ErrorRetirarStockProducto,
+        ErrorRegistrarProducto,
+        ErrorVerStockPropio
     };
 
     use crate::structs::publicacion::{
@@ -43,9 +48,16 @@ mod rustaceo_libre {
         ErrorCalificarPedido,
         ErrorComprarProducto,
         ErrorCancelarPedido,
-        ErrorReclamarFondos,
+        ErrorRetirarFondos,
         ErrorVerCompras,
         ErrorVerVentas,
+    };
+
+    use crate::structs::disputa::{
+        Disputa,
+        DisputaResuelta,
+        ErrorDisputarPedido,
+        ErrorResolverDisputa
     };
 
     //
@@ -59,12 +71,17 @@ mod rustaceo_libre {
         pub usuarios: Mapping<AccountId, Usuario>,
         /// <ID, Compra>
         pub pedidos: BTreeMap<u128, Pedido>,
+        /// <ID, Disputa>
+        pub disputas_en_curso: BTreeMap<u128, Disputa>,
+        pub disputas_resueltas: BTreeMap<u128, Disputa>,
         /// <ID, Producto>
         pub productos: BTreeMap<u128, Producto>,
         /// <ID, Publicacion>
         pub publicaciones: BTreeMap<u128, Publicacion>,
         /// Lleva un recuento de la próxima ID disponible para las compras.
         pedidos_siguiente_id: u128,
+        /// Lleva un recuento de la próxima ID disponible para las disputas.
+        disputas_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para los productos.
         productos_siguiente_id: u128,
         /// Lleva un recuento de la próxima ID disponible para las publicaciones.
@@ -73,6 +90,8 @@ mod rustaceo_libre {
         tarifa_de_servicio: u128,
         /// ID del dueño del contrato
         pub owner: AccountId,
+        /// Staff declarado por owner.
+        pub staff: Vec<AccountId>
     }
 
     #[ink(impl)]
@@ -95,14 +114,64 @@ mod rustaceo_libre {
             Self {
                 usuarios: Default::default(),
                 pedidos: Default::default(),
+                disputas_en_curso: Default::default(),
+                disputas_resueltas: Default::default(),
                 productos: Default::default(),
                 publicaciones: Default::default(),
                 pedidos_siguiente_id: 0,
+                disputas_siguiente_id: 0,
                 productos_siguiente_id: 0,
                 publicaciones_siguiente_id: 0,
                 tarifa_de_servicio,
                 owner: Self::env().caller(),
+                staff: Default::default()
             }
+        }
+
+        //
+        // OWNER / STAFF
+        //
+
+        /// Solo ejecutable por OWNER
+        /// Incluye a la ID designada como miembro del Staff, otorgándole permisos.
+        /// 
+        /// Devolverá true si la operación fue exitosa.
+        /// Devolverá false si caller no es OWNER o la ID que se quiere incluir al Staff es un usuario.
+        /// Un miembro del staff no puede nunca actuar como usuario. 
+        #[ink(message)]
+        pub fn agregar_staff(&mut self, id_staff: AccountId) -> bool {
+            if self.env().caller() != self.owner {
+                return false;
+            }
+
+            if self.usuarios.contains(&id_staff) {
+                return false;
+            }
+
+            if self.staff.contains(&id_staff) {
+                return false;
+            }
+
+            self.staff.push(id_staff);
+            true
+        }
+
+        /// Solo ejecutable por OWNER
+        /// Elimina a la ID designada de la lista de miembros del Staff, quitándole permisos.
+        /// 
+        /// Devolverá true si la operación fue exitosa.
+        /// Devolverá false si caller no es OWNER o la ID que se quiere incluir al Staff no está en la lista.
+        #[ink(message)]
+        pub fn eliminar_staff(&mut self, id_staff: AccountId) -> bool {
+            if self.env().caller() != self.owner {
+                return false;
+            }
+
+            let Some(position) = self.staff.iter().position(|&id| id == id_staff)
+            else { return false; };
+
+            self.staff.remove(position);
+            true
         }
 
         //
@@ -253,17 +322,21 @@ mod rustaceo_libre {
             }
         }
 
+        /// El vendedor puede retirar los fondos de una compra si fue recibida hace al menos tres días
+        /// y no existe una disputa en curso en contra del vendedor,
+        /// o ejecutar la política de reclamo si el comprador no la marca como recibida.
+        /// 
         /// Política de reclamo:
         /// 
-        /// Si el vendedor despachó el producto y el comprador no lo marcó como recibido después de 60 días,
-        /// el vendedor puede reclamar los fondos del pedido y la misma se marcará automáticamente como recibida,
+        /// Si el vendedor despachó el pedido y el comprador no lo marcó como recibido después de 60 días,
+        /// el vendedor puede reclamar los fondos del pedido y el mismo se marcará automáticamente como recibida,
         /// sin necesidad de consentimiento ni voluntad del comprador.
         /// 
         /// Puede dar error si el usuario no está registrado, la transacción no existe,
         /// el usuario no es el vendedor de la publicación o el tiempo pasado no condice con la política de reclamo
         #[ink(message)]
-        pub fn reclamar_fondos(&mut self, id_compra: u128) -> Result<u128, ErrorReclamarFondos> {
-            let operacion = self._reclamar_fondos(self.env().block_timestamp(), self.env().caller(), id_compra);
+        pub fn retirar_fondos(&mut self, id_compra: u128) -> Result<u128, ErrorRetirarFondos> {
+            let operacion = self._retirar_fondos(self.env().block_timestamp(), self.env().caller(), id_compra);
             
             let Ok(valor) = operacion
             else { return operacion };
@@ -291,31 +364,13 @@ mod rustaceo_libre {
         }
         
         /// Si el pedido indicado fue despachado y el usuario es el comprador, se establece como recibido.
-        /// El comprador recibirá los fondos descontando una tarifa por el servicio.
         /// 
         /// Puede dar error si el usuario no está registrado, la compra no existe,
         /// la compra no fue despachada, ya fue recibida, no es el comprador quien intenta recibirlo
         /// o ya fue cancelado.
         #[ink(message)]
         pub fn pedido_recibido(&mut self, id_compra: u128) -> Result<(), ErrorProductoRecibido> {
-            let operacion = self._pedido_recibido(self.env().block_timestamp(), self.env().caller(), id_compra);
-
-            let Ok((vendedor, valor)) = operacion
-            else { return Err(operacion.unwrap_err()) };
-
-            // descontar tarifa de servicio
-            let tarifa_servicio = self._calcular_tarifa_de_servicio(valor);
-
-            let Some(valor_final) = valor.checked_sub(tarifa_servicio)
-            else {
-                // desestimar tarifa de servicio por error al calcularla
-                let _ = self.env().transfer(vendedor, valor);
-                return Ok(());
-            };
-
-            let _ = self.env().transfer(vendedor, valor_final);
-
-            Ok(())
+            self._pedido_recibido(self.env().block_timestamp(), self.env().caller(), id_compra) 
         }
 
         /// Dada una ID de pedido y una calificación (1..=5), se califica el mismo.
@@ -421,6 +476,43 @@ mod rustaceo_libre {
             self._ver_calificacion_vendedor(self.env().caller())
         }
 
+        //
+        // disputa.rs:
+        //
+
+        /// Un comprador, después de recibir el producto, puede disputar su pedido aclarando el argumento para la disputa.
+        /// Sólo el comprador puede hacer esto y el vendedor tiene la posibilidad de, con esta misma función,
+        /// contraargumentar la disputa en su favor.
+        /// 
+        /// Sólo un miembro del Personal puede visualizar todas las disputas y darles finalización.
+        /// Una disputa que no tenga contraargumento del vendedor deberá esperar 14 días
+        /// para poder concluirse a favor del comprador.
+        /// 
+        /// Devolverá error si el usuario no existe, la compra no existe, no es el comprador o vendedor,
+        /// es el vendedor y no hay una disputa, es el comprador y ya realizó la disputa o la disputa ya concluyó.
+        #[ink(message)]
+        pub fn disputar_pedido(&mut self, id_pedido: u128, argumento: String) -> Result<(), ErrorDisputarPedido> {
+            self._disputar_pedido(self.env().block_timestamp(), self.env().caller(), id_pedido, argumento)
+        }
+
+        /// Da una disputa por resuelta según la información que brinda el miembro del Staff.
+        /// Entregará los fondos del pedido a quien corresponda.
+        /// 
+        /// Devolverá la información de pago correspondiente si la operación concretó correctamente.
+        /// Devolverá None si no es miembro del Staff, la disputa no existe o no está en curso.
+        #[ink(message)]
+        pub fn staff_resolver_disputa(&mut self, id_disputa: u128, resultado: DisputaResuelta) -> Result<(), ErrorResolverDisputa> {
+            let operacion = self._staff_resolver_disputa(self.env().caller(), id_disputa, resultado);
+
+            let Ok((id_ganador, valor_total)) = operacion
+            else { return Err(operacion.unwrap_err()) }; // safe unwrap
+
+            // transferir fondos al ganador de la disputa
+            let _ = self.env().transfer(id_ganador, valor_total);
+
+            Ok(())
+        }
+
 ////////////////////////////////////////////////////////////////////////////////
 
         /// Devuelve la siguiente ID disponible para pedidos
@@ -437,6 +529,23 @@ mod rustaceo_libre {
             };
 
             self.pedidos_siguiente_id = add_res;
+            id // devolver
+        }
+
+        /// Devuelve la siguiente ID disponible para disputas
+        /// 
+        /// Si la próxima ID causaría Overflow, devuelve 0 y reinicia la cuenta.
+        pub fn next_id_disputas(&mut self) -> u128 {
+            let id = self.disputas_siguiente_id; // obtener actual
+            let add_res = self.disputas_siguiente_id.checked_add(1); // sumarle 1 al actual para que apunte a un id desocupado
+            
+            let Some(add_res) = add_res
+            else {
+                self.disputas_siguiente_id = 1;
+                return 0;
+            };
+
+            self.disputas_siguiente_id = add_res;
             id // devolver
         }
 

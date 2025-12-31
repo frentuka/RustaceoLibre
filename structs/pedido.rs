@@ -1,6 +1,6 @@
-use ink::{primitives::AccountId, prelude::vec::Vec};
+use ink::{prelude::vec::Vec, primitives::AccountId};
 
-use crate::{rustaceo_libre::RustaceoLibre, structs::producto::CategoriaProducto};
+use crate::{rustaceo_libre::RustaceoLibre, structs::{producto::CategoriaProducto}};
 
 //
 // estado pedido
@@ -41,7 +41,8 @@ pub struct Pedido {
     pub vendedor: AccountId,
     pub calificacion_comprador: Option<u8>, // la calificación que el comprador dió al vendedor
     pub calificacion_vendedor: Option<u8>,  // viceversa
-    primer_solicitud_cancelacion: Option<AccountId>, // almacena la id de quien solicitó la cancelación para verificar mutualidad
+    pub disputa: Option<u128>,
+    pub primer_solicitud_cancelacion: Option<AccountId>, // almacena la id de quien solicitó la cancelación para verificar mutualidad
 }
 
 //
@@ -62,6 +63,7 @@ impl Pedido {
             vendedor,
             calificacion_comprador: None, // la calificación que dió el comprador
             calificacion_vendedor: None,  // ídem pero vendedor
+            disputa: None,
             primer_solicitud_cancelacion: None
         }
     }
@@ -195,10 +197,12 @@ pub enum ErrorVerVentas {
     feature = "std",
     derive(ink::storage::traits::StorageLayout)
 )]
-pub enum ErrorReclamarFondos {
+pub enum ErrorRetirarFondos {
     UsuarioNoRegistrado,
     PedidoInexistente,
     SoloVendedorPuede,
+    DisputaEnCurso,
+    DisputaNoFavorable,
     NoConvalidaPoliticaDeReclamo,
     FondosYaTransferidos,
     EstadoNoEsDespachado,
@@ -327,6 +331,10 @@ impl RustaceoLibre {
 
     //
 
+    /// El vendedor puede retirar los fondos de una compra si fue recibida hace al menos tres días
+    /// y no existe una disputa en curso en contra del vendedor,
+    /// o ejecutar la política de reclamo si el comprador no la marca como recibida.
+    /// 
     /// Política de reclamo:
     /// 
     /// Si el vendedor despachó el pedido y el comprador no lo marcó como recibido después de 60 días,
@@ -335,46 +343,109 @@ impl RustaceoLibre {
     /// 
     /// Puede dar error si el usuario no está registrado, la transacción no existe,
     /// el usuario no es el vendedor de la publicación o el tiempo pasado no condice con la política de reclamo
-    pub fn _reclamar_fondos(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<u128, ErrorReclamarFondos> {
+    pub fn _retirar_fondos(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<u128, ErrorRetirarFondos> {
         // validar usuario
         if !self.usuarios.contains(caller) {
-            return Err(ErrorReclamarFondos::UsuarioNoRegistrado);
+            return Err(ErrorRetirarFondos::UsuarioNoRegistrado);
         }
 
-        // validar compra
-        let Some(compra) = self.pedidos.get(&id_compra).cloned()
-        else { return Err(ErrorReclamarFondos::PedidoInexistente); };
+        // validar pedido
+        let Some(pedido) = self.pedidos.get(&id_compra).cloned()
+        else { return Err(ErrorRetirarFondos::PedidoInexistente); };
 
         // validar usuario es vendedor
-        if caller != compra.vendedor {
-            return Err(ErrorReclamarFondos::SoloVendedorPuede);
+        if caller != pedido.vendedor {
+            return Err(ErrorRetirarFondos::SoloVendedorPuede);
         }
 
         // validar que los fondos no hayan sido ya transferidos
-        if compra.fondos_fueron_transferidos {
-            return Err(ErrorReclamarFondos::FondosYaTransferidos);
+        // un pedido cancelado SIEMPRE va a tener sus fondos ya transferidos
+        if pedido.fondos_fueron_transferidos || match pedido.estado { EstadoPedido::Cancelado(_) => true, _ => false } {
+            return Err(ErrorRetirarFondos::FondosYaTransferidos);
         }
 
+        //
+        // retiro sin politica de reclamo
+        //
+
+        let mut puede_retirar_sin_pdr = false;
+
+        // validar tiempo transcurrido
+        let timestamp_recibido = if let EstadoPedido::Recibido(timestamp_recibido) = pedido.estado {
+            timestamp_recibido
+        } else {
+            puede_retirar_sin_pdr = false;
+            0
+        };
+        let tiempo_necesario = 259_200_000u64;  // 1000*60*60*24*3 = 3 días
+        let tiempo_transcurrido = if let Some(tiempo_transcurrido) = timestamp.checked_sub(timestamp_recibido) {
+            tiempo_transcurrido
+        } else {
+            0 // forzar false en el check de tiempo transcurrido
+        };
+
+        if tiempo_necesario < tiempo_transcurrido {
+            // validar que no exista disputa en curso
+            if let Some(id_disputa) = pedido.disputa {
+                if self.disputas_en_curso.contains_key(&id_disputa) {
+                    return Err(ErrorRetirarFondos::DisputaEnCurso);
+                } else {
+                    // la disputa finalizó. verificar en favor de quién
+                    if let Some(disputa) = self.disputas_resueltas.get(&id_disputa) {
+                        if disputa.resuelta_favor_vendedor() {
+                            return Err(ErrorRetirarFondos::DisputaNoFavorable);
+                        }
+
+                        puede_retirar_sin_pdr = true;
+                    } else {
+                        // la disputa existe pero no existe ¿?
+                        puede_retirar_sin_pdr = true;
+                    }
+                }
+            } else {
+                puede_retirar_sin_pdr = true;
+            }
+        }
+
+        if puede_retirar_sin_pdr {
+            // no existe ninguna disputa, pasaron 3 días o más. puede retirar
+
+            let valor_compra = pedido.valor_total;
+
+            // guardar compra
+            let mut compra = pedido;
+            compra.fondos_fueron_transferidos = true;
+            compra.estado = EstadoPedido::Recibido(timestamp);
+            self.pedidos.insert(id_compra, compra);
+
+            // devolver Ok(valor) debería transferir los fondos de la compra en lib.rs
+            return Ok(valor_compra);
+        }
+
+        //
+        // retiro con política de reclamo
+        //
+
         // validar politica de reclamo: estado del pedido
-        let EstadoPedido::Despachado(timestamp_despacho) = compra.estado
-        else { return Err(ErrorReclamarFondos::EstadoNoEsDespachado); };
+        let EstadoPedido::Despachado(timestamp_despacho) = pedido.estado
+        else { return Err(ErrorRetirarFondos::EstadoNoEsDespachado); };
 
         // validar política de reclamo: tiempo desde despachado
         let Some(elapsed_time) = timestamp.checked_sub(timestamp_despacho)
-        else { return Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo) };
+        else { return Err(ErrorRetirarFondos::NoConvalidaPoliticaDeReclamo) };
 
         // 30 días: 1000ms*60s*60m*24h*60d
         let time_millis_60_days = 5_184_000_000u64;
 
         // validar politica de reclamo: 60 días desde despacho
         if elapsed_time < time_millis_60_days {
-            return Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo);
+            return Err(ErrorRetirarFondos::NoConvalidaPoliticaDeReclamo);
         }
 
-        let valor_compra = compra.valor_total;
+        let valor_compra = pedido.valor_total;
 
         // guardar compra
-        let mut compra = compra;
+        let mut compra = pedido;
         compra.fondos_fueron_transferidos = true;
         compra.estado = EstadoPedido::Recibido(timestamp);
         self.pedidos.insert(id_compra, compra);
@@ -439,12 +510,11 @@ impl RustaceoLibre {
     //
 
     /// Si el pedido indicado fue despachado y el usuario es el comprador, se establece como recibido.
-    /// Devuelve la ID del vendedor y la cantidad de criptomoneda que se le debe transferir por el pedido.
     /// 
     /// Puede dar error si el usuario no está registrado, la compra no existe,
     /// la compra no fue despachada, ya fue recibida, no es el comprador quien intenta recibirlo
     /// o ya fue cancelado.
-    pub fn _pedido_recibido(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<(AccountId, u128), ErrorProductoRecibido> {
+    pub fn _pedido_recibido(&mut self, timestamp: u64, caller: AccountId, id_compra: u128) -> Result<(), ErrorProductoRecibido> {
         // verificar usuario
         let Some(usuario) = self.usuarios.get(caller)
         else { return Err(ErrorProductoRecibido::UsuarioNoRegistrado); };
@@ -474,15 +544,11 @@ impl RustaceoLibre {
             EstadoPedido::Cancelado(_) => return Err(ErrorProductoRecibido::PedidoCancelado),
         }
 
-        let vendedor = pedido.vendedor;
-        let valor_compra = pedido.valor_total;
-
         let mut compra = pedido.clone();
         compra.estado = EstadoPedido::Recibido(timestamp);
-        compra.fondos_fueron_transferidos = true;
         self.pedidos.insert(compra.id, compra);
 
-        Ok((vendedor, valor_compra))
+        Ok(())
     }
 
     //
@@ -1058,12 +1124,13 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
         contrato.pedidos.insert(id_compra, compra);
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
 
         // Assert
         assert_eq!(resultado, Ok(valor_total));
@@ -1104,14 +1171,15 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::UsuarioNoRegistrado));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::UsuarioNoRegistrado));
     }
 
 
@@ -1129,10 +1197,10 @@ mod tests {
         // No se inserta ninguna compra
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra_inexistente);
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra_inexistente);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::PedidoInexistente));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::PedidoInexistente));
     }
 
 
@@ -1164,15 +1232,16 @@ mod tests {
             vendedor: vendedor_real,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
         contrato.pedidos.insert(id_compra, compra);
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, caller_falso, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, caller_falso, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::SoloVendedorPuede));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::SoloVendedorPuede));
     }
 
 
@@ -1203,28 +1272,29 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
         contrato.pedidos.insert(id_compra, compra);
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::FondosYaTransferidos));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::FondosYaTransferidos));
     }
 
 
 
     #[ink::test]
-    fn reclamar_fondos_estado_incorrecto() {
+    fn reclamar_fondos_vendedor_politica_reclamo_mas14dias() {
         // Arrange
         let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
         let timestamp_despacho = 0;
-        let timestamp_actual = 6_184_000_000; // > 60 días
+        let timestamp_actual = 6_184_000_000; // > 14 días. política de reclamo disponible
 
         // Registrar usuarios
         contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
@@ -1243,15 +1313,16 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
         contrato.pedidos.insert(id_compra, compra);
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::EstadoNoEsDespachado));
+        assert_eq!(resultado, Ok(100));
     }
 
 
@@ -1263,7 +1334,7 @@ mod tests {
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
         let timestamp_despacho = 0;
-        let timestamp_actual = 2_000_000_000; // menos de 60 días después (~23 días)
+        let timestamp_actual = 1_209_600; // menos de 14 días después (~1.4 días)
 
         // Registrar usuarios
         contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
@@ -1282,15 +1353,16 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
         contrato.pedidos.insert(id_compra, compra);
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::NoConvalidaPoliticaDeReclamo));
     }
 
 
@@ -1323,15 +1395,16 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
         contrato.pedidos.insert(id_compra, compra);
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, otro_usuario, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, otro_usuario, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::SoloVendedorPuede));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::SoloVendedorPuede));
     }
 
 
@@ -1361,15 +1434,16 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
         contrato.pedidos.insert(id_compra, compra);
 
         // Act
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorReclamarFondos::FondosYaTransferidos));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::FondosYaTransferidos));
     }
 
 
@@ -1380,8 +1454,8 @@ mod tests {
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
         let timestamp_despacho = 0;
-        // timestamp_actual menor a 60 días (en nanos)
-        let timestamp_actual = 2_000_000_000; // ~23 días, menos de 60 días
+        // timestamp_actual menor a 14 días (en nanos)
+        let timestamp_actual = 2_000_000; // ~2.3 días, menos de 60 días
 
         contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
         contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
@@ -1398,11 +1472,12 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
-        assert_eq!(resultado, Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo));
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
+        assert_eq!(resultado, Err(ErrorRetirarFondos::NoConvalidaPoliticaDeReclamo));
     }
 
 
@@ -1435,6 +1510,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
 
@@ -1491,6 +1567,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -1540,6 +1617,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
 
@@ -1565,11 +1643,8 @@ mod tests {
         let resultado = contrato._pedido_recibido(timestamp_recibido, comprador, id_compra);
 
         // Assert
-        let Ok((id_vendedor, monto_compra)) = resultado
+        let Ok(()) = resultado
         else { panic!("Debería ser Ok"); };
-
-        assert_eq!(id_vendedor, vendedor);
-        assert_eq!(monto_compra, compra.valor_total);
 
         let actualizada = contrato.pedidos.get(&id_compra).unwrap();
         assert!(matches!(actualizada.estado, EstadoPedido::Recibido(_)));
@@ -1604,6 +1679,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         };
 
@@ -1662,11 +1738,12 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
-        assert_eq!(resultado, Err(ErrorReclamarFondos::FondosYaTransferidos));
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
+        assert_eq!(resultado, Err(ErrorRetirarFondos::FondosYaTransferidos));
     }
 
 
@@ -1688,17 +1765,19 @@ mod tests {
             publicacion: 0,
             cantidad_comprada: 1,
             valor_total: 100,
-            fondos_fueron_transferidos: false,
+            // Un pedido cancelado SIEMPRE va a tener sus fondos TRANSFERIDOS
+            fondos_fueron_transferidos: true,
             estado: EstadoPedido::Cancelado(timestamp_cancelado),
             comprador,
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
-        assert_eq!(resultado, Err(ErrorReclamarFondos::EstadoNoEsDespachado));
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
+        assert_eq!(resultado, Err(ErrorRetirarFondos::FondosYaTransferidos));
     }
 
 
@@ -1726,11 +1805,12 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
-        let resultado = contrato._reclamar_fondos(timestamp_actual, vendedor, id_compra);
-        assert_eq!(resultado, Err(ErrorReclamarFondos::FondosYaTransferidos));
+        let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
+        assert_eq!(resultado, Err(ErrorRetirarFondos::FondosYaTransferidos));
     }
 
 
@@ -1772,6 +1852,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -1812,6 +1893,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -1852,6 +1934,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -1892,6 +1975,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -1963,6 +2047,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2016,6 +2101,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2063,6 +2149,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2146,6 +2233,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2226,6 +2314,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2268,6 +2357,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2310,6 +2400,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2353,6 +2444,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2406,6 +2498,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2458,6 +2551,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2511,6 +2605,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2564,6 +2659,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2653,6 +2749,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2685,6 +2782,7 @@ mod tests {
             vendedor,
             calificacion_comprador: Some(5), // ya calificó
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2719,6 +2817,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2752,6 +2851,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2785,6 +2885,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2818,6 +2919,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2854,6 +2956,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2888,6 +2991,7 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
@@ -2921,11 +3025,12 @@ mod tests {
             vendedor,
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
-        let resultado = contrato._reclamar_fondos(timestamp_llamado, vendedor, id_compra);
-        assert_eq!(resultado, Err(ErrorReclamarFondos::NoConvalidaPoliticaDeReclamo));
+        let resultado = contrato._retirar_fondos(timestamp_llamado, vendedor, id_compra);
+        assert_eq!(resultado, Err(ErrorRetirarFondos::NoConvalidaPoliticaDeReclamo));
     }
 
 
@@ -2971,6 +3076,7 @@ mod tests {
             vendedor: AccountId::from([0x02; 32]),
             calificacion_comprador: None,
             calificacion_vendedor: None,
+            disputa: None,
             primer_solicitud_cancelacion: None,
         });
 
