@@ -882,6 +882,15 @@ impl RustaceoLibre {
         Ok(ventas)
     }
 
+    ///
+    ///
+    pub fn _ver_calificacion_comprador_pedido(&self, id_pedido: u128) -> Option<u8> {
+        let Some(pedido) = self.pedidos.get(&id_pedido)
+        else { return None; };
+
+        pedido.calificacion_comprador
+    }
+
 }
 
 #[cfg(test)]

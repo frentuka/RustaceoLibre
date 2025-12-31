@@ -524,6 +524,13 @@ pub mod rustaceo_libre {
             self._ver_calificacion_vendedor(user)
         }
 
+        ///////////////////////////////////
+        
+        #[ink(message)]
+        pub fn ver_calificacion_comprador_pedido(&self, id_pedido: u128) -> Option<u8> {
+            self._ver_calificacion_comprador_pedido(id_pedido)
+        }
+
         //
         // disputa.rs:
         //
