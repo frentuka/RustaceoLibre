@@ -644,6 +644,8 @@ pub mod rustaceo_libre {
     /// The below code is technically just normal Rust code.
     #[cfg(test)]
     mod tests {
+        use ink::primitives::AccountId;
+
         /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
 
@@ -664,7 +666,7 @@ pub mod rustaceo_libre {
         /// We test a simple use case of our contract.
         #[ink::test]
         fn next_id_works() {
-            let mut rustaceo_libre = RustaceoLibre::new(0);
+            let mut rustaceo_libre = RustaceoLibre::default();
 
             assert_eq!(rustaceo_libre.next_id_pedidos(), 0);
             assert_eq!(rustaceo_libre.next_id_pedidos(), 1);
@@ -680,6 +682,29 @@ pub mod rustaceo_libre {
             assert_eq!(rustaceo_libre.next_id_pedidos(), 0);
             assert_eq!(rustaceo_libre.next_id_productos(), 0);
             assert_eq!(rustaceo_libre.next_id_publicaciones(), 0);
+        }
+
+        #[ink::test]
+        fn test_ver_usuarios_compradores_vendedores() {
+            let mut rustaceo_libre = RustaceoLibre::default();
+
+            let cuenta_c = AccountId::from([0x1; 32]);
+            assert!(rustaceo_libre
+                ._registrar_usuario(cuenta_c, RolDeSeleccion::Comprador)
+                .is_ok());
+
+            let cuenta_v = AccountId::from([0x2; 32]);
+            assert!(rustaceo_libre
+                ._registrar_usuario(cuenta_v, RolDeSeleccion::Vendedor)
+                .is_ok());
+
+            let cuenta_a = AccountId::from([0x3; 32]);
+            assert!(rustaceo_libre
+                ._registrar_usuario(cuenta_a, RolDeSeleccion::Ambos)
+                .is_ok());
+
+            assert_eq!(rustaceo_libre.ver_usuarios_compradores().len(), 2);
+            assert_eq!(rustaceo_libre.ver_usuarios_vendedores().len(), 2);
         }
     }
 }
