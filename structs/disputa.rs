@@ -170,7 +170,7 @@ impl RustaceoLibre {
             let Some(disputa) = self.disputas_en_curso.get(&id_disputa)
             else { return Err(ErrorDisputarPedido::DisputaFinalizada); };
 
-            if disputa.en_curso_pendiente_contraargumentacion() {
+            if disputa.en_curso_pendiente_definicion() {
                 // vendedor ya contraargumentó
                 return Err(ErrorDisputarPedido::DisputaPendienteResolucion);
             }
@@ -310,9 +310,17 @@ impl RustaceoLibre {
 #[cfg(test)]    
 
 mod tests_disputas {
+    use crate::structs::{
+        pedido::{
+            EstadoPedido,
+            Pedido
+        },
+        
+        usuario::RolDeSeleccion
+    };
+
     use super::*;
     use ink::primitives::AccountId;
-    use ink::prelude::string::String;
 
     fn acc(byte: u8) -> AccountId {
         AccountId::from([byte; 32])

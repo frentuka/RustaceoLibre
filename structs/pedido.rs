@@ -42,7 +42,7 @@ pub struct Pedido {
     pub calificacion_comprador: Option<u8>, // la calificación que el comprador dió al vendedor
     pub calificacion_vendedor: Option<u8>,  // viceversa
     pub disputa: Option<u128>,
-    primer_solicitud_cancelacion: Option<AccountId>, // almacena la id de quien solicitó la cancelación para verificar mutualidad
+    pub primer_solicitud_cancelacion: Option<AccountId>, // almacena la id de quien solicitó la cancelación para verificar mutualidad
 }
 
 //
@@ -359,7 +359,8 @@ impl RustaceoLibre {
         }
 
         // validar que los fondos no hayan sido ya transferidos
-        if pedido.fondos_fueron_transferidos {
+        // un pedido cancelado SIEMPRE va a tener sus fondos ya transferidos
+        if pedido.fondos_fueron_transferidos || match pedido.estado { EstadoPedido::Cancelado(_) => true, _ => false } {
             return Err(ErrorRetirarFondos::FondosYaTransferidos);
         }
 
@@ -1286,14 +1287,14 @@ mod tests {
 
 
     #[ink::test]
-    fn reclamar_fondos_estado_incorrecto() {
+    fn reclamar_fondos_vendedor_politica_reclamo_mas14dias() {
         // Arrange
         let mut contrato = RustaceoLibre::new(0);
         let vendedor = AccountId::from([0x02; 32]);
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
         let timestamp_despacho = 0;
-        let timestamp_actual = 6_184_000_000; // > 60 días
+        let timestamp_actual = 6_184_000_000; // > 14 días. política de reclamo disponible
 
         // Registrar usuarios
         contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
@@ -1321,7 +1322,7 @@ mod tests {
         let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
 
         // Assert
-        assert_eq!(resultado, Err(ErrorRetirarFondos::EstadoNoEsDespachado));
+        assert_eq!(resultado, Ok(100));
     }
 
 
@@ -1333,7 +1334,7 @@ mod tests {
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
         let timestamp_despacho = 0;
-        let timestamp_actual = 2_000_000_000; // menos de 60 días después (~23 días)
+        let timestamp_actual = 1_209_600; // menos de 14 días después (~1.4 días)
 
         // Registrar usuarios
         contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
@@ -1453,8 +1454,8 @@ mod tests {
         let comprador = AccountId::from([0x01; 32]);
         let id_compra = 0;
         let timestamp_despacho = 0;
-        // timestamp_actual menor a 60 días (en nanos)
-        let timestamp_actual = 2_000_000_000; // ~23 días, menos de 60 días
+        // timestamp_actual menor a 14 días (en nanos)
+        let timestamp_actual = 2_000_000; // ~2.3 días, menos de 60 días
 
         contrato._registrar_usuario(vendedor, RolDeSeleccion::Vendedor).unwrap();
         contrato._registrar_usuario(comprador, RolDeSeleccion::Comprador).unwrap();
@@ -1764,7 +1765,8 @@ mod tests {
             publicacion: 0,
             cantidad_comprada: 1,
             valor_total: 100,
-            fondos_fueron_transferidos: false,
+            // Un pedido cancelado SIEMPRE va a tener sus fondos TRANSFERIDOS
+            fondos_fueron_transferidos: true,
             estado: EstadoPedido::Cancelado(timestamp_cancelado),
             comprador,
             vendedor,
@@ -1775,7 +1777,7 @@ mod tests {
         });
 
         let resultado = contrato._retirar_fondos(timestamp_actual, vendedor, id_compra);
-        assert_eq!(resultado, Err(ErrorRetirarFondos::EstadoNoEsDespachado));
+        assert_eq!(resultado, Err(ErrorRetirarFondos::FondosYaTransferidos));
     }
 
 
