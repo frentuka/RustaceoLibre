@@ -103,7 +103,7 @@ impl RustaceoLibre {
             return Err(ErrorRealizarPublicacion::PrecioCero);
         }
 
-        //verificar cantidad ofertada
+        // verificar cantidad ofertada
         if cantidad_ofertada == 0{
             return Err(ErrorRealizarPublicacion::StockInsuficiente);
         }
@@ -118,7 +118,7 @@ impl RustaceoLibre {
             return Err(ErrorRealizarPublicacion::NoEsVendedor);
         }
 
-        // verificar que haya stock (en el vendedor)
+        // verificar que haya stock (en el vendedor). también verifica que el vendedor tenga el producto
         let Some(stock_vendedor) = usuario.obtener_stock_producto(&id_producto)
         else { return Err(ErrorRealizarPublicacion::StockInsuficiente) };
 

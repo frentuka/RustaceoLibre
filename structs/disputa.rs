@@ -1,6 +1,6 @@
-use ink::{prelude::string::String, primitives::AccountId};
+use ink::{prelude::{string::String}, primitives::AccountId, prelude::vec::Vec};
 
-use crate::{rustaceo_libre::RustaceoLibre, structs::pedido::EstadoPedido};
+use crate::{rustaceo_libre::RustaceoLibre};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[ink::scale_derive(Encode, Decode, TypeInfo)]
@@ -234,6 +234,69 @@ impl RustaceoLibre {
         self.pedidos.insert(pedido.id, pedido);
 
         Ok(())
+    }
+
+    //
+
+    /// Devolverá los datos de la disputa
+    /// 
+    /// Devolverá None si el usuario no es parte del Staff ni participa en la disputa o si la misma no existe.
+    pub fn _consultar_disputa(&self, caller: AccountId, disputa: u128) -> Option<Disputa> {
+        let disputa = // buscar en curso. si no existe, buscar en resueltas. si no existe, devolver None 
+            if let Some(d) = self.disputas_en_curso.get(&disputa) { d }
+            else {
+                let Some(d) = self.disputas_resueltas.get(&disputa)
+                else { return None; }; // no existe
+                d
+            };
+
+        let es_staff = self.owner == caller || self.staff.contains(&caller); // podría ser una función del lib.rs pero bueno
+
+        //
+        // participa en la disputa?
+        //
+
+        let Some(pedido) = self.pedidos.get(&disputa.pedido)
+        else { return None; }; // una disputa que no pertenece a ningun pedido ¿?
+
+        // verificar si participa
+        if pedido.comprador != caller && pedido.vendedor != caller && !es_staff {
+            return None;
+        }
+
+        Some(disputa.clone())
+    }
+
+    //
+
+    /// Devolverá la lista de disputas sin veredicto.
+    /// 
+    /// Devolverá None si el usuario no es parte del Staff.
+    pub fn _staff_ver_disputas_en_curso(&self, caller: AccountId) -> Option<Vec<u128>> {
+        // verificar que el usuario sea miembro del Staff o dueño del contrato
+        if !self.staff.contains(&caller) && caller != self.owner {
+            return None;
+        }
+
+        // una lista vacía no es un error,
+        // es la forma explícita de mencionar que la consulta fue válida y no existen disputas en curso.
+        Some(self.disputas_en_curso.keys().cloned().collect())
+    }
+
+    //
+
+    /// Devolverá la lista de disputas con veredicto.
+    /// 
+    /// Devolverá None si el usuario no es parte del Staff.
+    pub fn _staff_ver_disputas_resueltas(&self, caller: AccountId) -> Option<Vec<u128>> {
+        // verificar que el usuario sea miembro del Staff o dueño del contrato
+        if !self.staff.contains(&caller) && caller != self.owner {
+            return None;
+        }
+
+        // una lista vacía no es un error,
+        // es la forma explícita de mencionar que la consulta fue válida y no existen disputas resueltas.
+        Some(self.disputas_resueltas.keys().cloned().collect())
     }
 
     //
@@ -837,5 +900,215 @@ mod tests_disputas {
         
         // Verificar que la disputa ya no está en curso
         assert!(c.disputas_en_curso.get(&id_disputa).is_none());
+    }
+
+    // --- coverage liviano: consultar + listados staff ---
+
+    #[ink::test]
+    fn consultar_disputa_none_si_no_existe() {
+        let c = RustaceoLibre::new(0);
+        assert!(c._consultar_disputa(acc(1), 999).is_none());
+    }
+
+    #[ink::test]
+    fn consultar_disputa_en_curso_ok_para_comprador() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 1;
+        let id_disputa = 10;
+
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+        c.disputas_en_curso.insert(
+            id_disputa,
+            Disputa {
+                id: id_disputa,
+                timestamp: 123,
+                pedido: id_pedido,
+                estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: None,
+                interventor: None,
+            },
+        );
+
+        let d = c._consultar_disputa(comprador, id_disputa).expect("debe poder consultar");
+        assert_eq!(d.id, id_disputa);
+        assert_eq!(d.pedido, id_pedido);
+        assert!(d.en_curso());
+    }
+
+    #[ink::test]
+    fn consultar_disputa_en_curso_none_para_tercero_no_staff() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let tercero = acc(3);
+        let id_pedido = 2;
+        let id_disputa = 20;
+
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+        c.disputas_en_curso.insert(
+            id_disputa,
+            Disputa {
+                id: id_disputa,
+                timestamp: 0,
+                pedido: id_pedido,
+                estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteDefinicion),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: Some("y".into()),
+                interventor: None,
+            },
+        );
+
+        assert!(c._consultar_disputa(tercero, id_disputa).is_none());
+    }
+
+    #[ink::test]
+    fn consultar_disputa_en_curso_ok_para_staff() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let staff = acc(9);
+        let id_pedido = 3;
+        let id_disputa = 30;
+
+        c.staff.push(staff);
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+        c.disputas_en_curso.insert(
+            id_disputa,
+            Disputa {
+                id: id_disputa,
+                timestamp: 0,
+                pedido: id_pedido,
+                estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: None,
+                interventor: None,
+            },
+        );
+
+        assert!(c._consultar_disputa(staff, id_disputa).is_some());
+    }
+
+    #[ink::test]
+    fn consultar_disputa_resuelta_ok_para_vendedor() {
+        let mut c = RustaceoLibre::new(0);
+        let comprador = acc(1);
+        let vendedor = acc(2);
+        let id_pedido = 4;
+        let id_disputa = 40;
+
+        c.pedidos.insert(id_pedido, pedido_base(id_pedido, comprador, vendedor));
+        c.disputas_resueltas.insert(
+            id_disputa,
+            Disputa {
+                id: id_disputa,
+                timestamp: 0,
+                pedido: id_pedido,
+                estado: EstadoDisputa::Resuelta(DisputaResuelta::FavorComprador {
+                    argumento_interventor: "ok".into(),
+                }),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: Some("y".into()),
+                interventor: Some(acc(8)),
+            },
+        );
+
+        let d = c._consultar_disputa(vendedor, id_disputa).expect("vendedor participa");
+        assert!(d.resuelta());
+    }
+
+    #[ink::test]
+    fn consultar_disputa_none_si_pedido_no_existe() {
+        let mut c = RustaceoLibre::new(0);
+        let id_disputa = 50;
+        c.disputas_en_curso.insert(
+            id_disputa,
+            Disputa {
+                id: id_disputa,
+                timestamp: 0,
+                pedido: 9999,
+                estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: None,
+                interventor: None,
+            },
+        );
+
+        assert!(c._consultar_disputa(acc(1), id_disputa).is_none());
+    }
+
+    #[ink::test]
+    fn staff_ver_disputas_en_curso_none_para_no_staff() {
+        let c = RustaceoLibre::new(0);
+        let owner = c.owner;
+        let no_staff = if owner == acc(1) { acc(2) } else { acc(1) };
+        assert!(c._staff_ver_disputas_en_curso(no_staff).is_none());
+    }
+
+    #[ink::test]
+    fn staff_ver_disputas_en_curso_owner_devuelve_lista() {
+        let mut c = RustaceoLibre::new(0);
+        let owner = c.owner;
+
+        // insertar disputas dummy (el contenido no importa para el listado)
+        c.disputas_en_curso.insert(
+            2,
+            Disputa {
+                id: 2,
+                timestamp: 0,
+                pedido: 0,
+                estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: None,
+                interventor: None,
+            },
+        );
+        c.disputas_en_curso.insert(
+            1,
+            Disputa {
+                id: 1,
+                timestamp: 0,
+                pedido: 0,
+                estado: EstadoDisputa::EnCurso(DisputaEnCurso::PendienteContraargumentacion),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: None,
+                interventor: None,
+            },
+        );
+
+        let ids = c._staff_ver_disputas_en_curso(owner).expect("owner puede ver");
+        assert_eq!(ids, vec![1, 2]);
+    }
+
+    #[ink::test]
+    fn staff_ver_disputas_resueltas_staff_devuelve_lista_y_vacio_ok() {
+        let mut c = RustaceoLibre::new(0);
+        let staff = acc(7);
+        c.staff.push(staff);
+
+        // vacío debe devolver Some(vec![])
+        assert_eq!(c._staff_ver_disputas_resueltas(staff), Some(vec![]));
+
+        c.disputas_resueltas.insert(
+            3,
+            Disputa {
+                id: 3,
+                timestamp: 0,
+                pedido: 0,
+                estado: EstadoDisputa::Resuelta(DisputaResuelta::FavorVendedor {
+                    argumento_interventor: "ok".into(),
+                }),
+                argumento_comprador: "x".into(),
+                argumento_vendedor: Some("y".into()),
+                interventor: Some(staff),
+            },
+        );
+
+        let ids = c
+            ._staff_ver_disputas_resueltas(staff)
+            .expect("staff puede ver");
+        assert_eq!(ids, vec![3]);
     }
 }

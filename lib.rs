@@ -550,6 +550,30 @@ pub mod rustaceo_libre {
             self._disputar_pedido(self.env().block_timestamp(), self.env().caller(), id_pedido, argumento)
         }
 
+        /// Devolverá los datos de la disputa
+        /// 
+        /// Devolverá None si el usuario no es parte del Staff ni participa en la disputa o si la misma no existe.
+        #[ink(message)]
+        pub fn consultar_disputa(&self, disputa: u128) -> Option<Disputa> {
+            self._consultar_disputa(self.env().caller(), disputa)
+        }
+
+        /// Devolverá la lista de disputas sin veredicto.
+        /// 
+        /// Devolverá None si el usuario no es parte del Staff.
+        #[ink(message)]
+        pub fn staff_ver_disputas_en_curso(&self) -> Option<Vec<u128>> {
+            self._staff_ver_disputas_en_curso(self.env().caller())
+        }
+
+        /// Devolverá la lista de disputas con veredicto.
+        /// 
+        /// Devolverá None si el usuario no es parte del Staff.
+        #[ink(message)]
+        pub fn staff_ver_disputas_resueltas(&self) -> Option<Vec<u128>> {
+            self._staff_ver_disputas_resueltas(self.env().caller())
+        }
+
         /// Da una disputa por resuelta según la información que brinda el miembro del Staff.
         /// Entregará los fondos del pedido a quien corresponda.
         /// 
