@@ -304,7 +304,6 @@ impl RustaceoLibre {
 
         Ok((id_ganador, valor_total))
     }
-
 }
 
 #[cfg(test)]    
