@@ -4,7 +4,7 @@ mod structs;
 
 #[allow(non_local_definitions)] // error molesto
 #[ink::contract]
-mod rustaceo_libre {
+pub mod rustaceo_libre {
     use ink::{
         prelude::vec::Vec,
         prelude::string::String,
