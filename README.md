@@ -8,9 +8,9 @@ Trabajo práctico final de la materia Seminario de Lenguajes: Rust.
 
 Rustaceo Libre es un marketplace «al estilo Mercado Libre» desarrollado en Ink!
 
-Despliegue del contrato (2025-07-17): aaUgbgCYnjHr6MVU2rNNnrp37zLM5jyZmpkUeXr48Zrvccx 
-
 Esta es una descripción de la estructura del sistema, implementando todo lo solicitado por el enunciado y agregando o reimaginando algunas funcionalidades
+
+NOTE: Descripción no actualizada para la entrega final del proyecto.
 
 ## Usuario
 
